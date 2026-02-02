@@ -4,10 +4,8 @@
 
 LocalStream Client is a web UI for the LocalStream app that lets you stream your personal music library from a LocalStream server running on your own network. You point the client at your LocalStream server URL, then browse and play your albums, artists, and tracks directly in the browser – no cloud upload required.
 
-Access the hosted LocalStream Client here: https://lsclient.qzz.io
-
 ![LocalStream client – connect screen](public/localstream.png)
-
+Access it here at ![https://lsclient.qzz.io](https://lsclient.qzz.io)
 ## How to Use
 
 ### 1. Install and run LocalStream
