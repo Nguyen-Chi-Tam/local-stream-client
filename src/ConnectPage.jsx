@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Youtube, Facebook, Instagram, Twitter, Github, Mail } from 'lucide-react';
 
 const STORAGE_KEY = 'localstream_server_url';
 
@@ -45,8 +46,8 @@ export default function ConnectPage({ onConnected }) {
   }
 
   return (
-    <main className="page">
-      <section className="card full connect-card">
+    <main className="page page-connect">
+      <section className="connect-card connect-shell">
         <div className="connect-layout mb-10">
           <div className="connect-left">
             <div className="connect-pill">LocalStream Client</div>
@@ -128,7 +129,120 @@ export default function ConnectPage({ onConnected }) {
             </div>
           </div>
         </div>
+
+        <div className="connect-extra">
+          <div className="connect-download-row">
+            <a
+              href="https://play.google.com/store/apps/details?id=com.jeet_studio.localstream4k&hl=en"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="connect-android-link"
+            >
+              Download LocalStream for Android
+            </a>
+            <a
+              href="https://github.com/manjeetdeswal/Local-Stream-Upnp---Http-Server-"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="connect-desktop-link"
+            >
+              Download LocalStream for Windows/Mac/Linux
+            </a>
+          </div>
+
+          <div className="connect-guide-grid">
+            <figure className="connect-guide-item">
+              <img
+                className="connect-guide-img-step1"
+                src="/start-server-on-your-device.jpg"
+                alt="Start the LocalStream server on your device"
+              />
+              <figcaption>1. Start the LocalStream server on your main device.</figcaption>
+            </figure>
+            <figure className="connect-guide-item">
+              <div className="connect-guide-stack">
+                <div>
+                  <img src="/type-the-server-address.png" alt="Copy and type the server address" />
+                  <p className="connect-guide-step-text">
+                    2. Copy the Main Server URL and paste it into the box above.
+                  </p>
+                </div>
+                <div>
+                  <img src="/start-music-streaming.png" alt="Start streaming your music" />
+                  <p className="connect-guide-step-text">3. Hit Continue and start streaming your music.</p>
+                  <img
+                    className="connect-guide-img-windows"
+                    src="/localstream-pc.png"
+                    alt="LocalStream Server running on Windows"
+                  />
+                  <p className="connect-guide-step-text">
+                    LocalStream Server on Windows/Mac and Linux also works.
+                  </p>
+                  <p className="connect-guide-note">
+                    To prevent your phone&apos;s custom ringtones from appearing here, set their album
+                    name to one of: "Alarms", "Ringtone", or "Notifications".
+                  </p>
+                </div>
+              </div>
+            </figure>
+          </div>
+        </div>
       </section>
+
+      <footer className="connect-credit">
+        <p className="connect-credit-text">My social account:</p>
+        <div className="connect-credit-links">
+          <a
+            href="https://www.youtube.com/@hoathuyetnhatnhat8919"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="connect-credit-icon youtube"
+            aria-label="YouTube"
+          >
+            <Youtube />
+          </a>
+          <a
+            href="https://www.facebook.com/nguyen.chi.tam.418729/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="connect-credit-icon facebook"
+            aria-label="Facebook"
+          >
+            <Facebook />
+          </a>
+          <a
+            href="https://www.instagram.com/qsd8gen1/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="connect-credit-icon instagram"
+            aria-label="Instagram"
+          >
+            <Instagram />
+          </a>
+          <a
+            href="https://x.com/scousersvn"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="connect-credit-icon twitter"
+            aria-label="Twitter/X"
+          >
+            <Twitter />
+          </a>
+          <a
+            href="https://github.com/Nguyen-Chi-Tam"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="connect-credit-icon github"
+            aria-label="GitHub"
+          >
+            <Github />
+          </a>
+        </div>
+        <div className="connect-credit-email">
+          <Mail className="connect-credit-email-icon" />
+          <a href="mailto:fegeltronics@gmail.com">fegeltronics@gmail.com</a>
+        </div>
+      </footer>
     </main>
   );
 }
