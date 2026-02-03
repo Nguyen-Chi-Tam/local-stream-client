@@ -170,14 +170,6 @@ export default function ConnectPage({ onConnected }) {
                 <div>
                   <img src="/start-music-streaming.png" alt="Start streaming your music" />
                   <p className="connect-guide-step-text">3. Hit Continue and start streaming your music.</p>
-                  <img
-                    className="connect-guide-img-windows"
-                    src="/localstream-pc.png"
-                    alt="LocalStream Server running on Windows"
-                  />
-                  <p className="connect-guide-step-text">
-                    LocalStream Server on Windows/Mac and Linux also works.
-                  </p>
                   <p className="connect-guide-note">
                     To prevent your phone&apos;s custom ringtones from appearing here, set their album
                     name to one of: "Alarms", "Ringtone", or "Notifications".
