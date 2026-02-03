@@ -449,6 +449,10 @@ export default function MediaPage({ serverUrl, onChangeServer }) {
       ? sortedAllItems[currentIndex]
       : null;
 
+  const currentArtUrl = currentlyPlaying
+    ? pickThumbnailUrl(serverUrl, currentlyPlaying)
+    : defaultArt;
+
   useEffect(() => {
     if (!currentlyPlaying) {
       setCurrentTime(0);
@@ -683,7 +687,7 @@ export default function MediaPage({ serverUrl, onChangeServer }) {
               {currentlyPlaying && (
                 <div className="player-art">
                   <img
-                    src={pickThumbnailUrl(serverUrl, currentlyPlaying)}
+                    src={currentArtUrl}
                     alt={pickTitle(currentlyPlaying)}
                     onError={(event) => {
                       const img = event.currentTarget;
