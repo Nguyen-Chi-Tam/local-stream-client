@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Shuffle, Repeat, SkipBack, SkipForward, Play, AudioLines, Pause } from 'lucide-react';
+import { Shuffle, Repeat, SkipBack, SkipForward, Play, AudioLines, Pause, Rewind, FastForward, ChevronUp, ChevronDown } from 'lucide-react';
 import defaultArt from '/default-art.png';
 
 const STORAGE_KEY = 'localstream_server_url';
@@ -243,6 +243,8 @@ export default function MediaPage({ serverUrl, onChangeServer }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortKey, setSortKey] = useState('original');
   const [isSortReversed, setIsSortReversed] = useState(false);
+  // Index of the item in the original, unsorted list (items have a stable
+  // `__index` we keep here so re-sorting doesn't change the playing track).
   const [currentIndex, setCurrentIndex] = useState(-1);
   const [isShuffle, setIsShuffle] = useState(false);
   const [isRepeat, setIsRepeat] = useState(false);
@@ -251,6 +253,7 @@ export default function MediaPage({ serverUrl, onChangeServer }) {
   const [currentDuration, setCurrentDuration] = useState(0);
 
   const audioRef = useRef(null);
+  const searchInputRef = useRef(null);
 
   useEffect(() => {
     if (!serverUrl) return;
@@ -357,12 +360,8 @@ export default function MediaPage({ serverUrl, onChangeServer }) {
       setIsPlaying(false);
       setCurrentTime(0);
       setCurrentDuration(0);
-      return;
     }
-    if (currentIndex >= sortedAllItems.length) {
-      setCurrentIndex(sortedAllItems.length - 1);
-    }
-  }, [sortedAllItems, currentIndex]);
+  }, [sortedAllItems.length]);
 
   // Play by index within the full sorted playlist.
   function handlePlay(index) {
@@ -382,37 +381,52 @@ export default function MediaPage({ serverUrl, onChangeServer }) {
         console.error(err);
         setError('Unable to start playback in this browser.');
       });
-    setCurrentIndex(index);
+    // Store the item's original index so that changing the sort order does
+    // not change which track is considered "current".
+    const originalIndex =
+      typeof item.__index === 'number' ? item.__index : index;
+    setCurrentIndex(originalIndex);
     setIsPlaying(true);
     setCurrentTime(0);
+  }
+
+  function getCurrentPlaylistIndex() {
+    if (currentIndex < 0) return -1;
+    return sortedAllItems.findIndex((item) =>
+      typeof item.__index === 'number'
+        ? item.__index === currentIndex
+        : false
+    );
   }
 
   function getNextIndex() {
     const n = sortedAllItems.length;
     if (!n) return -1;
+    const playlistIndex = getCurrentPlaylistIndex();
     if (isShuffle && n > 1) {
-      let next = currentIndex;
-      for (let i = 0; i < 5 && next === currentIndex; i += 1) {
+      let next = playlistIndex >= 0 ? playlistIndex : 0;
+      for (let i = 0; i < 5 && next === playlistIndex; i += 1) {
         next = Math.floor(Math.random() * n);
       }
       return next;
     }
-    if (currentIndex < 0) return 0;
-    return (currentIndex + 1) % n;
+    if (playlistIndex < 0) return 0;
+    return (playlistIndex + 1) % n;
   }
 
   function getPrevIndex() {
     const n = sortedAllItems.length;
     if (!n) return -1;
+    const playlistIndex = getCurrentPlaylistIndex();
     if (isShuffle && n > 1) {
-      let prev = currentIndex;
-      for (let i = 0; i < 5 && prev === currentIndex; i += 1) {
+      let prev = playlistIndex >= 0 ? playlistIndex : 0;
+      for (let i = 0; i < 5 && prev === playlistIndex; i += 1) {
         prev = Math.floor(Math.random() * n);
       }
       return prev;
     }
-    if (currentIndex < 0) return n - 1;
-    return (currentIndex - 1 + n) % n;
+    if (playlistIndex < 0) return n - 1;
+    return (playlistIndex - 1 + n) % n;
   }
 
   function handleEnded() {
@@ -428,7 +442,7 @@ export default function MediaPage({ serverUrl, onChangeServer }) {
 
   const hasItems = sortedAllItems.length > 0;
 
-  // Group only the currently visible (filtered) items for display.
+  // Group only the currently visible (filtered) items for display by folder.
   const groups = useMemo(() => {
     const map = {};
     filteredItems.forEach((item) => {
@@ -439,15 +453,25 @@ export default function MediaPage({ serverUrl, onChangeServer }) {
     return map;
   }, [filteredItems]);
 
-  const folderNames = useMemo(
-    () => Object.keys(groups).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })),
+  const groupKeys = useMemo(
+    () =>
+      Object.keys(groups).sort((a, b) =>
+        a.localeCompare(b, undefined, { sensitivity: 'base' })
+      ),
     [groups]
   );
 
-  const currentlyPlaying =
-    currentIndex >= 0 && currentIndex < sortedAllItems.length
-      ? sortedAllItems[currentIndex]
-      : null;
+  const currentlyPlaying = useMemo(() => {
+    if (currentIndex < 0) return null;
+    const found = sortedAllItems.find((item) =>
+      typeof item.__index === 'number' ? item.__index === currentIndex : false
+    );
+    return found || null;
+  }, [sortedAllItems, currentIndex]);
+
+  const currentArtUrl = currentlyPlaying
+    ? pickThumbnailUrl(serverUrl, currentlyPlaying)
+    : defaultArt;
 
   useEffect(() => {
     if (!currentlyPlaying) {
@@ -496,8 +520,7 @@ export default function MediaPage({ serverUrl, onChangeServer }) {
 
     if (!currentlyPlaying) {
       if (sortedAllItems.length === 0) return;
-      const startIndex = currentIndex >= 0 ? currentIndex : 0;
-      handlePlay(startIndex);
+      handlePlay(0);
       return;
     }
 
@@ -537,14 +560,113 @@ export default function MediaPage({ serverUrl, onChangeServer }) {
     setCurrentTime(value);
   }
 
+  function skipRelative(deltaSeconds) {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const duration = Number.isFinite(audio.duration)
+      ? audio.duration
+      : currentDuration || (currentlyPlaying ? pickDurationSeconds(currentlyPlaying) : 0) || 0;
+
+    const rawTime = (audio.currentTime || 0) + deltaSeconds;
+    const clampedTime = duration
+      ? Math.max(0, Math.min(rawTime, duration))
+      : Math.max(0, rawTime);
+
+    audio.currentTime = clampedTime;
+    setCurrentTime(clampedTime);
+  }
+
+  function scrollListToTop() {
+    const list = document.getElementById('music-list');
+    if (!list) return;
+    if (typeof list.scrollTo === 'function') {
+      list.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      list.scrollTop = 0;
+    }
+  }
+
+  function scrollListToBottom() {
+    const list = document.getElementById('music-list');
+    if (!list) return;
+    const max = list.scrollHeight || 0;
+    if (typeof list.scrollTo === 'function') {
+      list.scrollTo({ top: max, behavior: 'smooth' });
+    } else {
+      list.scrollTop = max;
+    }
+  }
+
+  useEffect(() => {
+    function handleKeyDown(event) {
+      if (!sortedAllItems.length) return;
+
+      const active = document.activeElement;
+      if (searchInputRef.current && active === searchInputRef.current) {
+        return;
+      }
+
+      if (event.altKey || event.ctrlKey || event.metaKey) return;
+
+      const key = event.key;
+
+      if (key === ' ' || key === 'Spacebar') {
+        event.preventDefault();
+        togglePlayPause();
+        return;
+      }
+
+      const lower = typeof key === 'string' ? key.toLowerCase() : '';
+
+      if (lower === 'c') {
+        event.preventDefault();
+        const idx = getPrevIndex();
+        if (idx >= 0) handlePlay(idx);
+        return;
+      }
+
+      if (lower === 'm') {
+        event.preventDefault();
+        const idx = getNextIndex();
+        if (idx >= 0) handlePlay(idx);
+        return;
+      }
+
+      if (lower === 'v') {
+        event.preventDefault();
+        skipRelative(-10);
+        return;
+      }
+
+      if (lower === 'n') {
+        event.preventDefault();
+        skipRelative(10);
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [sortedAllItems.length, togglePlayPause, getPrevIndex, getNextIndex, skipRelative]);
+
   return (
     <>
       <header className="top-bar">
         <div className="top-bar-left">
           <h1>My Music</h1>
-          <span id="server-label" className="server-label">
-            {serverUrl ? `Connected to ${serverUrl}` : ''}
-          </span>
+          {serverUrl && (
+            <a
+              id="server-label"
+              className="server-label"
+              href={serverUrl}
+              target="_blank"
+              rel="noreferrer"
+            >
+              {`Connected to ${serverUrl}`}
+            </a>
+          )}
         </div>
         <div className="top-bar-right">
           <button
@@ -584,16 +706,9 @@ export default function MediaPage({ serverUrl, onChangeServer }) {
                 placeholder="Search by title, artist, or folder…"
                 aria-label="Search music"
                 value={searchQuery}
+                ref={searchInputRef}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
-              <button
-                id="clear-search"
-                className="secondary"
-                type="button"
-                onClick={() => setSearchQuery('')}
-              >
-                Clear
-              </button>
             </div>
             <div className="sort-row">
               <label htmlFor="sort-select" className="sort-label">
@@ -603,11 +718,10 @@ export default function MediaPage({ serverUrl, onChangeServer }) {
                 id="sort-select"
                 aria-label="Sort music list"
                 value={sortKey}
-                onChange={(e) => setSortKey(e.target.value || 'original')}
+                onChange={(e) => setSortKey(e.target.value || '')}
               >
-                <option value="original">Original</option>
-                <option value="name">Name</option>
                 <option value="date">Date</option>
+                <option value="name">Name</option>
                 <option value="duration">Duration</option>
               </select>
               <button
@@ -622,11 +736,12 @@ export default function MediaPage({ serverUrl, onChangeServer }) {
             </div>
           </div>
 
-          <ul id="music-list" className="music-list">
-            {folderNames.map((folder) => (
-              <React.Fragment key={folder}>
-                <li className="folder-header">{folder}</li>
-                {groups[folder].map((item) => {
+          <div className="music-list-shell">
+            <ul id="music-list" className="music-list">
+              {groupKeys.map((groupKey) => (
+                <React.Fragment key={groupKey}>
+                  <li className="folder-header">{groupKey}</li>
+                  {groups[groupKey].map((item) => {
                   const isActive =
                     !!currentlyPlaying &&
                     (currentlyPlaying === item ||
@@ -653,7 +768,13 @@ export default function MediaPage({ serverUrl, onChangeServer }) {
                         />
                       </div>
                       <div className="music-main">
-                        <div className="music-title">{pickTitle(item)}</div>
+                        <div
+                          className={
+                            'music-title' + (isActive ? ' playing-title' : '')
+                          }
+                        >
+                          {pickTitle(item)}
+                        </div>
                         <div className="music-artist">{pickArtist(item)}</div>
                         <div className="music-meta">{pickDuration(item)}</div>
                       </div>
@@ -674,54 +795,83 @@ export default function MediaPage({ serverUrl, onChangeServer }) {
                     </li>
                   );
                 })}
-              </React.Fragment>
-            ))}
-          </ul>
+                </React.Fragment>
+              ))}
+            </ul>
+            <div className="music-side-rail">
+              <button
+                type="button"
+                className="scroll-edge-button"
+                aria-label="Scroll to top of list"
+                onClick={scrollListToTop}
+                disabled={!hasItems}
+              >
+                <ChevronUp size={16} />
+              </button>
+              <button
+                type="button"
+                className="scroll-edge-button"
+                aria-label="Scroll to bottom of list"
+                onClick={scrollListToBottom}
+                disabled={!hasItems}
+              >
+                <ChevronDown size={16} />
+              </button>
+            </div>
+          </div>
 
           <footer className="player" id="player" hidden={!currentlyPlaying}>
-            <div className="player-main">
-              {currentlyPlaying && (
-                <div className="player-art">
-                  <img
-                    src={pickThumbnailUrl(serverUrl, currentlyPlaying)}
-                    alt={pickTitle(currentlyPlaying)}
-                    onError={(event) => {
-                      const img = event.currentTarget;
-                      if (img.dataset.fallbackApplied === 'true') return;
-                      img.dataset.fallbackApplied = 'true';
-                      img.src = defaultArt;
-                    }}
-                  />
-                </div>
-              )}
-              <div className="player-info">
-                <div id="current-title" className="player-title">
-                  <button
-                    type="button"
-                    className="player-title-button"
-                    onClick={scrollToCurrent}
-                  >
-                    {currentlyPlaying ? pickTitle(currentlyPlaying) : ''}
-                  </button>
-                </div>
-                <div id="current-artist" className="player-artist">
-                  {currentlyPlaying ? pickArtist(currentlyPlaying) : ''}
+            {currentlyPlaying && (
+              <div
+                className="player-background"
+                style={{ backgroundImage: `url(${currentArtUrl})` }}
+              />
+            )}
+            <div className="player-overlay" />
+            <div className="player-content">
+              <div className="player-main">
+                {currentlyPlaying && (
+                  <div className="player-art">
+                    <img
+                      src={currentArtUrl}
+                      alt={pickTitle(currentlyPlaying)}
+                      onError={(event) => {
+                        const img = event.currentTarget;
+                        if (img.dataset.fallbackApplied === 'true') return;
+                        img.dataset.fallbackApplied = 'true';
+                        img.src = defaultArt;
+                      }}
+                    />
+                  </div>
+                )}
+                <div className="player-info">
+                  <div id="current-title" className="player-title">
+                    <button
+                      type="button"
+                      className="player-title-button"
+                      onClick={scrollToCurrent}
+                    >
+                      {currentlyPlaying ? pickTitle(currentlyPlaying) : ''}
+                    </button>
+                  </div>
+                  <div id="current-artist" className="player-artist">
+                    {currentlyPlaying ? pickArtist(currentlyPlaying) : ''}
+                  </div>
                 </div>
               </div>
-            </div>
-            <div className="player-timeline" aria-label="Playback timeline">
-              <span className="player-time">{formatTime(currentTime)}</span>
-              <input
-                type="range"
-                min="0"
-                max={currentDuration || (currentlyPlaying ? pickDurationSeconds(currentlyPlaying) : 0) || 0}
-                step="1"
-                value={Math.min(currentTime, currentDuration || Number.MAX_SAFE_INTEGER)}
-                onChange={handleSeek}
-              />
-              <span className="player-time">{formatTime(currentDuration || pickDurationSeconds(currentlyPlaying))}</span>
-            </div>
-            <div className="player-controls" aria-label="Playback controls">
+              <div className="player-timeline" aria-label="Playback timeline">
+                <span className="player-time">{formatTime(currentTime)}</span>
+                <input
+                  type="range"
+                  min="0"
+                  max={currentDuration || (currentlyPlaying ? pickDurationSeconds(currentlyPlaying) : 0) || 0}
+                  step="1"
+                  value={Math.min(currentTime, currentDuration || Number.MAX_SAFE_INTEGER)}
+                  onChange={handleSeek}
+                />
+                <span className="player-time">{formatTime(currentDuration || pickDurationSeconds(currentlyPlaying))}</span>
+              </div>
+              <div className="player-controls" aria-label="Playback controls">
               <button
               id="repeat-toggle"
               type="button"
@@ -745,6 +895,15 @@ export default function MediaPage({ serverUrl, onChangeServer }) {
                 <SkipBack size={18} />
               </button>
               <button
+                id="rewind-10"
+                type="button"
+                className="icon-button"
+                aria-label="Rewind 10 seconds"
+                onClick={() => skipRelative(-10)}
+              >
+                <Rewind size={18} />
+              </button>
+              <button
                 id="play-pause"
                 type="button"
                 className="icon-button play-main"
@@ -757,6 +916,16 @@ export default function MediaPage({ serverUrl, onChangeServer }) {
                 ) : (
                   <Play size={20} fill="currentColor" stroke="none" />
                 )}
+              </button>
+              
+              <button
+                id="forward-10"
+                type="button"
+                className="icon-button"
+                aria-label="Fast forward 10 seconds"
+                onClick={() => skipRelative(10)}
+              >
+                <FastForward size={18} />
               </button>
               <button
                 id="next-track"
@@ -781,6 +950,7 @@ export default function MediaPage({ serverUrl, onChangeServer }) {
                 <Shuffle size={18} />
               </button>
 
+              </div>
             </div>
             <audio
               id="audio"
