@@ -473,10 +473,6 @@ export default function MediaPage({ serverUrl, onChangeServer }) {
     ? pickThumbnailUrl(serverUrl, currentlyPlaying)
     : defaultArt;
 
-  const currentArtUrl = currentlyPlaying
-    ? pickThumbnailUrl(serverUrl, currentlyPlaying)
-    : defaultArt;
-
   useEffect(() => {
     if (!currentlyPlaying) {
       setCurrentTime(0);
@@ -825,49 +821,57 @@ export default function MediaPage({ serverUrl, onChangeServer }) {
           </div>
 
           <footer className="player" id="player" hidden={!currentlyPlaying}>
-            <div className="player-main">
-              {currentlyPlaying && (
-                <div className="player-art">
-                  <img
-                    src={pickThumbnailUrl(serverUrl, currentlyPlaying)}
-                    alt={pickTitle(currentlyPlaying)}
-                    onError={(event) => {
-                      const img = event.currentTarget;
-                      if (img.dataset.fallbackApplied === 'true') return;
-                      img.dataset.fallbackApplied = 'true';
-                      img.src = defaultArt;
-                    }}
-                  />
-                </div>
-              )}
-              <div className="player-info">
-                <div id="current-title" className="player-title">
-                  <button
-                    type="button"
-                    className="player-title-button"
-                    onClick={scrollToCurrent}
-                  >
-                    {currentlyPlaying ? pickTitle(currentlyPlaying) : ''}
-                  </button>
-                </div>
-                <div id="current-artist" className="player-artist">
-                  {currentlyPlaying ? pickArtist(currentlyPlaying) : ''}
+            {currentlyPlaying && (
+              <div
+                className="player-background"
+                style={{ backgroundImage: `url(${currentArtUrl})` }}
+              />
+            )}
+            <div className="player-overlay" />
+            <div className="player-content">
+              <div className="player-main">
+                {currentlyPlaying && (
+                  <div className="player-art">
+                    <img
+                      src={currentArtUrl}
+                      alt={pickTitle(currentlyPlaying)}
+                      onError={(event) => {
+                        const img = event.currentTarget;
+                        if (img.dataset.fallbackApplied === 'true') return;
+                        img.dataset.fallbackApplied = 'true';
+                        img.src = defaultArt;
+                      }}
+                    />
+                  </div>
+                )}
+                <div className="player-info">
+                  <div id="current-title" className="player-title">
+                    <button
+                      type="button"
+                      className="player-title-button"
+                      onClick={scrollToCurrent}
+                    >
+                      {currentlyPlaying ? pickTitle(currentlyPlaying) : ''}
+                    </button>
+                  </div>
+                  <div id="current-artist" className="player-artist">
+                    {currentlyPlaying ? pickArtist(currentlyPlaying) : ''}
+                  </div>
                 </div>
               </div>
-            </div>
-            <div className="player-timeline" aria-label="Playback timeline">
-              <span className="player-time">{formatTime(currentTime)}</span>
-              <input
-                type="range"
-                min="0"
-                max={currentDuration || (currentlyPlaying ? pickDurationSeconds(currentlyPlaying) : 0) || 0}
-                step="1"
-                value={Math.min(currentTime, currentDuration || Number.MAX_SAFE_INTEGER)}
-                onChange={handleSeek}
-              />
-              <span className="player-time">{formatTime(currentDuration || pickDurationSeconds(currentlyPlaying))}</span>
-            </div>
-            <div className="player-controls" aria-label="Playback controls">
+              <div className="player-timeline" aria-label="Playback timeline">
+                <span className="player-time">{formatTime(currentTime)}</span>
+                <input
+                  type="range"
+                  min="0"
+                  max={currentDuration || (currentlyPlaying ? pickDurationSeconds(currentlyPlaying) : 0) || 0}
+                  step="1"
+                  value={Math.min(currentTime, currentDuration || Number.MAX_SAFE_INTEGER)}
+                  onChange={handleSeek}
+                />
+                <span className="player-time">{formatTime(currentDuration || pickDurationSeconds(currentlyPlaying))}</span>
+              </div>
+              <div className="player-controls" aria-label="Playback controls">
               <button
               id="repeat-toggle"
               type="button"
