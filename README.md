@@ -72,3 +72,12 @@ You can control music playback using the following keyboard shortcuts:
 
 - Audio (music) streaming is supported today.
 - **Video & photo support will be available in Summer 2026.**
+
+## Important note about connectivity & security
+
+Right now, the hosted client at **https://lsclient.qzz.io** has a limitation:
+
+- Modern browsers block secure (HTTPS) websites from directly talking to insecure (HTTP) servers on private networks.
+- Because LocalStream servers currently run over plain HTTP on LAN addresses (for example `http://192.168.x.x:8080`), the hosted client may not work reliably on all devices unless extra networking steps (like local hosting or a reverse‑proxy / tunnel) are used.
+
+I am sorry for this inconvenience and for any confusion it may cause. I am actively exploring safer, more user‑friendly options (such as better local hosting guidance and secure reverse‑proxy setups) so that you can connect to your own LocalStream server without exposing your library unnecessarily. This README will be updated as soon as a more robust solution is available.
