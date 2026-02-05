@@ -1,3 +1,4 @@
+
 # LocalStream Client
 
 ## Purpose
@@ -52,6 +53,20 @@ Or, to run the Node proxy server (if configured):
 - Album art is loaded from your LocalStream server, with a sensible default image when artwork isn’t available.
 
 <img src="public/start-music-streaming.png" alt="Browse and play your music" width="50%" />
+
+# Keyboard Controls
+
+You can control music playback using the following keyboard shortcuts:
+
+<img src="public/control-music-by-keyboard.jpg" alt="Music control keys" />
+
+- **Space**: Play/Pause
+- **C**: Previous track
+- **M**: Next track
+- **V**: Rewind 10 seconds
+- **N**: Fast forward 10 seconds
+- **B**: Restart current song
+
 
 ## Platform Support
 

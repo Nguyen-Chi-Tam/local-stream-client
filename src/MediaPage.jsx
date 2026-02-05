@@ -642,6 +642,18 @@ export default function MediaPage({ serverUrl, onChangeServer }) {
       if (lower === 'n') {
         event.preventDefault();
         skipRelative(10);
+        return;
+      }
+
+      if (lower === 'b') {
+        event.preventDefault();
+        // Restart the currently playing song from the start
+        const audio = audioRef.current;
+        if (audio && currentlyPlaying) {
+          audio.currentTime = 0;
+          audio.play();
+        }
+        return;
       }
     }
 
@@ -839,7 +851,16 @@ export default function MediaPage({ serverUrl, onChangeServer }) {
                         const img = event.currentTarget;
                         if (img.dataset.fallbackApplied === 'true') return;
                         img.dataset.fallbackApplied = 'true';
+                        // If the error is a 404, replace with defaultArt
+                        // This works for both CORS and non-CORS images
                         img.src = defaultArt;
+                      }}
+                      onLoad={(event) => {
+                        // Remove fallback flag if image loads successfully
+                        const img = event.currentTarget;
+                        if (img.dataset.fallbackApplied === 'true' && img.src !== defaultArt) {
+                          delete img.dataset.fallbackApplied;
+                        }
                       }}
                     />
                   </div>

@@ -170,6 +170,17 @@ export default function ConnectPage({ onConnected }) {
                 <div>
                   <img src="/start-music-streaming.png" alt="Start streaming your music" />
                   <p className="connect-guide-step-text">3. Hit Continue and start streaming your music.</p>
+                  <div className="connect-guide-keyboard-controls" style={{marginTop: '1em', marginBottom: '1em'}}>
+                    <strong>Keyboard Controls:</strong>
+                    <ul style={{margin: 0, paddingLeft: '1.2em'}}>
+                      <li><b>Space</b>: Play/Pause</li>
+                      <li><b>C</b>: Previous track</li>
+                      <li><b>M</b>: Next track</li>
+                      <li><b>V</b>: Rewind 10 seconds</li>
+                      <li><b>N</b>: Fast forward 10 seconds</li>
+                      <li><b>B</b>: Restart current song</li>
+                    </ul>
+                  </div>
                   <p className="connect-guide-note">
                     To prevent your phone&apos;s custom ringtones from appearing here, set their album
                     name to one of: "Alarms", "Ringtone", or "Notifications".
