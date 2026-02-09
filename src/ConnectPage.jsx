@@ -141,12 +141,12 @@ export default function ConnectPage({ onConnected }) {
               Download LocalStream for Android
             </a>
             <a
-              href="https://github.com/manjeetdeswal/Local-Stream-Upnp---Http-Server-"
+              href="https://github.com/Nguyen-Chi-Tam/local-stream-client/releases/download/OfficialApp/Local.Stream.Client.Setup.1.0.0.exe"
               target="_blank"
               rel="noopener noreferrer"
               className="connect-desktop-link"
             >
-              Download LocalStream for Windows/Mac/Linux
+              Download LocalStream Client for Windows
             </a>
           </div>
 

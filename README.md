@@ -81,3 +81,6 @@ Right now, the hosted client at **https://lsclient.qzz.io** has a limitation:
 - Because LocalStream servers currently run over plain HTTP on LAN addresses (for example `http://192.168.x.x:8080`), the hosted client may not work reliably on all devices unless extra networking steps (like local hosting or a reverse‑proxy / tunnel) are used.
 
 I am sorry for this inconvenience and for any confusion it may cause. I am actively exploring safer, more user‑friendly options (such as better local hosting guidance and secure reverse‑proxy setups) so that you can connect to your own LocalStream server without exposing your library unnecessarily. This README will be updated as soon as a more robust solution is available.
+
+## Windows App release
+To fix the limitation of this website, I've rebuilt this project into a Windows app using Electron. To use it, download the official release from this GitHub repository, or from the website **https://lsclient.qzz.io**

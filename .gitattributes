@@ -1,2 +1,8 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+release/**/*.dll filter=lfs diff=lfs merge=lfs -text
+release/**/*.pak filter=lfs diff=lfs merge=lfs -text
+release/**/*.bin filter=lfs diff=lfs merge=lfs -text
+release/**/*.dat filter=lfs diff=lfs merge=lfs -text
+release/**/*.asar filter=lfs diff=lfs merge=lfs -text
+release/**/*.exe filter=lfs diff=lfs merge=lfs -text
