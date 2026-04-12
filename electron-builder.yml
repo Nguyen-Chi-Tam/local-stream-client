@@ -1,0 +1,12 @@
+appId: com.localstream.client
+productName: Local Stream Client
+directories:
+  output: release
+  buildResources: build
+files:
+  - filter:
+      - dist/**/*
+      - electron/**/*
+      - package.json
+win:
+  target: nsis
