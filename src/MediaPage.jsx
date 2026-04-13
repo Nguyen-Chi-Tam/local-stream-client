@@ -1106,7 +1106,7 @@ export default function MediaPage({ serverUrl, onChangeServer, onNavigate }) {
               <button
                 id="sort-reverse"
                 type="button"
-                className="secondary"
+                className="icon-button sort-icon-button"
                 aria-label="Reverse current order"
                 onClick={() => setIsSortReversed((v) => !v)}
               >
@@ -1116,7 +1116,7 @@ export default function MediaPage({ serverUrl, onChangeServer, onNavigate }) {
                 id="group-folder-toggle"
                 type="button"
                 className={
-                  'secondary sort-toggle' + (groupByFolder ? ' toggle-active' : '')
+                  'icon-button sort-icon-button sort-toggle' + (groupByFolder ? ' toggle-active' : '')
                 }
                 aria-pressed={groupByFolder ? 'true' : 'false'}
                 aria-label="Toggle grouping by folder"

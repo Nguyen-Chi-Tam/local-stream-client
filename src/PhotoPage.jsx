@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Folder, ChevronUp, ChevronDown } from 'lucide-react';
+import { Folder, ChevronUp, ChevronDown, ArrowDownToLine, X } from 'lucide-react';
 import { fetchMediaItemsCached, getMediaEndpoint } from './mediaApiCache.js';
 import {
   getItemId,
@@ -69,6 +69,20 @@ function pickPhotoSourceUrl(serverUrl, item) {
   }
 
   return base + '/' + text;
+}
+
+function buildPhotoFilename(item, fallbackUrl) {
+  const title = pickTitle(item).trim() || 'photo';
+  const safeTitle = title.replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_').replace(/\s+/g, ' ').trim();
+
+  try {
+    const path = new URL(String(fallbackUrl || ''), window.location.href).pathname || '';
+    const extMatch = path.match(/\.[a-zA-Z0-9]{2,6}$/);
+    const ext = extMatch ? extMatch[0].toLowerCase() : '.jpg';
+    return (safeTitle || 'photo') + ext;
+  } catch {
+    return (safeTitle || 'photo') + '.jpg';
+  }
 }
 
 export default function PhotoPage({
@@ -269,6 +283,39 @@ export default function PhotoPage({
     setCurrentPhotoIndex(-1);
   }
 
+  async function handleSaveCurrentPhoto() {
+    if (selectedPhotoId == null || !selectedPhotoUrl) return;
+
+    const selectedItem =
+      photoListForSlideshow.find((item) => getItemId(item) === selectedPhotoId) || null;
+    const filename = buildPhotoFilename(selectedItem || {}, selectedPhotoUrl);
+
+    try {
+      const response = await fetch(selectedPhotoUrl, { mode: 'cors' });
+      if (!response.ok) throw new Error('Failed to fetch image');
+
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch {
+      // Fallback for environments that block blob downloads.
+      const link = document.createElement('a');
+      link.href = selectedPhotoUrl;
+      link.download = filename;
+      link.target = '_blank';
+      link.rel = 'noreferrer';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  }
+
   return (
     <>
       <header className="top-bar">
@@ -357,7 +404,7 @@ export default function PhotoPage({
               </select>
               <button
                 type="button"
-                className="secondary"
+                className="icon-button sort-icon-button"
                 aria-label="Reverse current order"
                 onClick={() => setIsSortReversed((v) => !v)}
               >
@@ -366,7 +413,7 @@ export default function PhotoPage({
               <button
                 type="button"
                 className={
-                  'secondary sort-toggle' + (groupByFolder ? ' toggle-active' : '')
+                  'icon-button sort-icon-button sort-toggle' + (groupByFolder ? ' toggle-active' : '')
                 }
                 aria-pressed={groupByFolder ? 'true' : 'false'}
                 aria-label="Toggle grouping by folder"
@@ -503,27 +550,33 @@ export default function PhotoPage({
             >
               {/* Close Button */}
               <button
+                type="button"
                 onClick={closePhotoOverlay}
+                className="photo-overlay-icon-button photo-overlay-close-button"
                 style={{
-                  position: 'absolute',
-                  top: '1rem',
-                  right: '1rem',
                   backgroundColor: 'rgba(255, 255, 255, 0.2)',
-                  border: 'none',
                   color: 'white',
-                  fontSize: '2rem',
-                  width: '3rem',
-                  height: '3rem',
-                  borderRadius: '50%',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  zIndex: 1002,
                 }}
                 aria-label="Close photo"
               >
-                ×
+                <X size={34} strokeWidth={2.75} />
+              </button>
+
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  handleSaveCurrentPhoto();
+                }}
+                className="photo-overlay-icon-button photo-overlay-save-button"
+                style={{
+                  backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                  color: 'white',
+                }}
+                aria-label="Save photo"
+                title="Save photo"
+              >
+                <ArrowDownToLine size={30} strokeWidth={2.65} />
               </button>
 
               {/* Photo Counter */}

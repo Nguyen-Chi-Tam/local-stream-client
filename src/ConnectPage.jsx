@@ -1,5 +1,9 @@
+
 import React, { useState } from 'react';
 import { Youtube, Facebook, Instagram, Twitter, Github, Mail } from 'lucide-react';
+import startServerImg from '../public/start-server-on-your-device.jpg';
+import typeServerImg from '../public/type-the-server-address.png';
+import startMusicImg from '../public/start-music-streaming.png';
 
 const STORAGE_KEY = 'localstream_server_url';
 
@@ -132,7 +136,7 @@ export default function ConnectPage({ onConnected }) {
 
         <div className="connect-extra">
           <div className="connect-download-row">
-            <a
+            {/* <a
               href="https://play.google.com/store/apps/details?id=com.jeet_studio.localstream4k&hl=en"
               target="_blank"
               rel="noopener noreferrer"
@@ -147,14 +151,14 @@ export default function ConnectPage({ onConnected }) {
               className="connect-desktop-link"
             >
               Download LocalStream Client for Windows
-            </a>
+            </a> */}
           </div>
 
           <div className="connect-guide-grid">
             <figure className="connect-guide-item">
               <img
                 className="connect-guide-img-step1"
-                src="/start-server-on-your-device.jpg"
+                src={startServerImg}
                 alt="Start the LocalStream server on your device"
               />
               <figcaption>1. Start the LocalStream server on your main device.</figcaption>
@@ -162,13 +166,13 @@ export default function ConnectPage({ onConnected }) {
             <figure className="connect-guide-item">
               <div className="connect-guide-stack">
                 <div>
-                  <img src="/type-the-server-address.png" alt="Copy and type the server address" />
+                  <img src={typeServerImg} alt="Copy and type the server address" />
                   <p className="connect-guide-step-text">
                     2. Copy the Main Server URL and paste it into the box above.
                   </p>
                 </div>
                 <div>
-                  <img src="/start-music-streaming.png" alt="Start streaming your music" />
+                  <img src={startMusicImg} alt="Start streaming your music" />
                   <p className="connect-guide-step-text">3. Hit Continue and start streaming your music.</p>
                   <div className="connect-guide-keyboard-controls" style={{marginTop: '1em', marginBottom: '1em'}}>
                     <strong>Keyboard Controls:</strong>

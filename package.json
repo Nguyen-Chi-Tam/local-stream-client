@@ -7,10 +7,12 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:web": "vite build --base=/local-stream-client/",
+    "build:electron": "vite build --base=./",
     "preview": "vite preview",
-    "electron:dev": "npm run build && electron .",
-    "electron:build": "npm run build && electron-builder --config electron-builder.yml",
-    "predeploy":"npm run build",
+    "electron:dev": "npm run build:electron && electron .",
+    "electron:build": "npm run build:electron && electron-builder --config electron-builder.yml",
+    "predeploy":"npm run build:web",
     "deploy":"gh-pages -d dist"
   },
   "dependencies": {

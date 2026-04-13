@@ -7,8 +7,6 @@ LocalStream Client is a web UI for the LocalStream app that lets you stream your
 
 <img src="public/localstream.png" alt="LocalStream client – connect screen" width="50%" />
 
-You can also try the hosted version at: https://lsclient.qzz.io
-
 ## How to Use
 
 ### 1. Install and run LocalStream
@@ -47,7 +45,7 @@ If you encounter "HTTP block" or Mixed Content errors, you can use Caddy as a re
 
 ### 3. Connect the client to your LocalStream server
 
-1. Open the LocalStream Client (either the hosted version or your local dev server).
+1. Open the LocalStream Client (either your GitHub Pages site or your local dev server).
 2. On the **Connect** page, copy the **Main Server URL** from the LocalStream app.
 3. Paste that URL into the **LocalStream server address** field.
 4. Click **Continue to my music**.
@@ -80,7 +78,7 @@ You can control music playback using the following keyboard shortcuts:
 
 ## Important note about connectivity & security
 
-Right now, the hosted client at **https://lsclient.qzz.io** has a limitation:
+If you use a publicly hosted client (including GitHub Pages), there is an important limitation:
 
 - Modern browsers block secure (HTTPS) websites from directly talking to insecure (HTTP) servers on private networks.
 - Because LocalStream servers currently run over plain HTTP on LAN addresses (for example `http://192.168.x.x:8080`), the hosted client may not work reliably on all devices unless extra networking steps (like local hosting or a reverse‑proxy / tunnel) are used.
@@ -88,4 +86,4 @@ Right now, the hosted client at **https://lsclient.qzz.io** has a limitation:
 To fix this securely on your local network, you can use the built-in Caddy reverse-proxy setup (see "Using HTTPS with Caddy" above). This provides local HTTPS and bypasses the browser's mixed content blocks.
 
 ## Windows App release
-To fix the limitation of this website, I've rebuilt this project into a Windows app using Electron. To use it, download the official release from this GitHub repository, or from the website **https://lsclient.qzz.io**
+To avoid browser mixed-content limitations and get a smoother local-network experience, this project is also available as a Windows app built with Electron. Download the official release from this GitHub repository.

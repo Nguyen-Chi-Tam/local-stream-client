@@ -6,10 +6,50 @@ import PhotoPage from './PhotoPage.jsx';
 import { clearMediaCache } from './mediaApiCache.js';
 
 const STORAGE_KEY = 'localstream_server_url';
+const BASE_URL = (import.meta.env.BASE_URL || '/').replace(/\/+$/, '');
+const APP_BASE = BASE_URL && BASE_URL !== '.' ? BASE_URL : '';
+
+function stripBasePath(pathname) {
+  const raw = pathname || '/';
+  if (!APP_BASE) return raw || '/';
+
+  if (raw === APP_BASE) return '/';
+  if (raw.startsWith(APP_BASE + '/')) {
+    return raw.slice(APP_BASE.length) || '/';
+  }
+
+  return raw;
+}
+
+function withBasePath(pathname) {
+  const normalized = pathname && pathname.startsWith('/') ? pathname : '/';
+  return APP_BASE ? `${APP_BASE}${normalized}` : normalized;
+}
 
 export default function App() {
   const [serverUrl, setServerUrl] = useState('');
-  const [path, setPath] = useState(() => window.location.pathname || '/');
+  const [path, setPath] = useState(() => stripBasePath(window.location.pathname));
+
+  // Keyboard zoom shortcut handling for Electron
+  useEffect(() => {
+    function handleZoomKeys(e) {
+      if (!window.electronZoom) return;
+      if (e.ctrlKey && !e.shiftKey && !e.altKey) {
+        if (e.key === '+' || e.key === '=') {
+          window.electronZoom.zoomIn();
+          e.preventDefault();
+        } else if (e.key === '-') {
+          window.electronZoom.zoomOut();
+          e.preventDefault();
+        } else if (e.key === '0') {
+          window.electronZoom.zoomReset();
+          e.preventDefault();
+        }
+      }
+    }
+    window.addEventListener('keydown', handleZoomKeys);
+    return () => window.removeEventListener('keydown', handleZoomKeys);
+  }, []);
 
   function getSectionFromPath(rawPath) {
     if (rawPath === '/media/video') return 'video';
@@ -31,7 +71,7 @@ export default function App() {
 
   useEffect(() => {
     function handlePopState() {
-      setPath(window.location.pathname || '/');
+      setPath(stripBasePath(window.location.pathname));
     }
 
     window.addEventListener('popstate', handlePopState);
@@ -42,8 +82,10 @@ export default function App() {
 
   function navigate(to) {
     const normalized = to || '/';
-    if (window.location.pathname !== normalized) {
-      window.history.pushState({}, '', normalized);
+    const destination = withBasePath(normalized);
+
+    if (window.location.pathname !== destination) {
+      window.history.pushState({}, '', destination);
     }
     setPath(normalized);
   }

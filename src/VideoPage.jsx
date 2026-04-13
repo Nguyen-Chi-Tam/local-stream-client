@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { AudioLines, Play, Pause, Rewind, FastForward, SkipBack, SkipForward, Folder, ChevronUp, ChevronDown, Maximize, Minimize } from 'lucide-react';
+import { AudioLines, Play, Pause, Rewind, FastForward, SkipBack, SkipForward, Folder, ChevronUp, ChevronDown, Maximize, Minimize, PictureInPicture2, Repeat } from 'lucide-react';
 import { fetchMediaItemsCached, getMediaEndpoint } from './mediaApiCache.js';
 import {
   getItemId,
@@ -66,6 +66,22 @@ function normalizeDurationSeconds(raw) {
   return Math.round(n);
 }
 
+function isTypingElement(el) {
+  if (!el) return false;
+  if (el.isContentEditable) return true;
+
+  const tag = (el.tagName || '').toUpperCase();
+  if (tag === 'TEXTAREA') return true;
+  if (tag !== 'INPUT') return false;
+
+  const inputType = String(el.type || '').toLowerCase();
+  if (inputType === 'hidden' || inputType === 'checkbox' || inputType === 'radio' || inputType === 'range' || inputType === 'button' || inputType === 'submit' || inputType === 'reset' || inputType === 'file') {
+    return false;
+  }
+
+  return !el.readOnly && !el.disabled;
+}
+
 export default function VideoPage({
   serverUrl,
   onChangeServer,
@@ -87,13 +103,17 @@ export default function VideoPage({
   const [currentTime, setCurrentTime] = useState(0);
   const [currentDuration, setCurrentDuration] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isFloatingWindow, setIsFloatingWindow] = useState(false);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [isPortraitVideo, setIsPortraitVideo] = useState(false);
+  const [isLooping, setIsLooping] = useState(false);
+  const [keyboardActionHint, setKeyboardActionHint] = useState(null);
 
   const videoRef = useRef(null);
   const videoContainerRef = useRef(null);
   const searchInputRef = useRef(null);
   const hideTimerRef = useRef(null);
+  const keyboardHintTimerRef = useRef(null);
   const musicListRef = useRef(null);
   const scrollTrackRef = useRef(null);
   const [isDraggingThumb, setIsDraggingThumb] = useState(false);
@@ -292,6 +312,31 @@ export default function VideoPage({
     [serverUrl, selectedVideo]
   );
 
+  const mediaSessionArtwork = useMemo(() => {
+    const raw = String(selectedVideoPoster || '').trim();
+    if (!raw || raw === '/default-art.png') {
+      return [];
+    }
+
+    let src = raw;
+    const hasScheme = /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(raw);
+
+    if (!hasScheme) {
+      try {
+        src = new URL(raw, serverUrl || window.location.href).toString();
+      } catch {
+        return [];
+      }
+    }
+
+    return [
+      {
+        src,
+        sizes: '512x512',
+      },
+    ];
+  }, [selectedVideoPoster, serverUrl]);
+
   useEffect(() => {
     if (!items.length) {
       setSelectedVideoId(null);
@@ -344,6 +389,38 @@ export default function VideoPage({
     }
   }, []);
 
+  const toggleLooping = useCallback(() => {
+    setIsLooping((prev) => !prev);
+  }, []);
+
+  // Map action keys to Lucide icon components
+  const actionIcons = {
+    play: <Play size={32} fill="currentColor" stroke="none" />, 
+    pause: <Pause size={32} fill="currentColor" stroke="none" />, 
+    prev: <SkipBack size={32} />, 
+    next: <SkipForward size={32} />, 
+    rewind: <Rewind size={32} />, 
+    forward: <FastForward size={32} />, 
+    restart: <AudioLines size={32} />, 
+    fullscreen: <Maximize size={32} />, 
+    exitFullscreen: <Minimize size={32} />, 
+    loopOn: <Repeat size={32} color="#38bdf8" />, 
+    loopOff: <Repeat size={32} color="#64748b" />,
+  };
+
+  const showKeyboardActionHint = useCallback((iconKey) => {
+    if (!iconKey) return;
+    setKeyboardActionHint(iconKey);
+    if (keyboardHintTimerRef.current) {
+      clearTimeout(keyboardHintTimerRef.current);
+      keyboardHintTimerRef.current = null;
+    }
+    keyboardHintTimerRef.current = setTimeout(() => {
+      setKeyboardActionHint(null);
+      keyboardHintTimerRef.current = null;
+    }, 950);
+  }, []);
+
   function restartVideo() {
     const video = videoRef.current;
     if (video) {
@@ -355,7 +432,27 @@ export default function VideoPage({
   function handleTimeUpdate() {
     const video = videoRef.current;
     if (!video) return;
-    setCurrentTime(video.currentTime || 0);
+    const t = video.currentTime || 0;
+    setCurrentTime(t);
+
+    if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
+      const supportsPosition =
+        typeof navigator.mediaSession.setPositionState === 'function';
+      if (supportsPosition) {
+        try {
+          navigator.mediaSession.setPositionState({
+            duration:
+              Number.isFinite(video.duration) && video.duration > 0
+                ? video.duration
+                : currentDuration || 0,
+            playbackRate: video.playbackRate || 1,
+            position: t,
+          });
+        } catch {
+          // ignore position errors
+        }
+      }
+    }
   }
 
   function handleLoadedMetadata() {
@@ -380,8 +477,16 @@ export default function VideoPage({
 
   function handleVideoEnded() {
     setIsPlaying(false);
-    // Auto-play next video
-    goToNextVideo();
+    if (isLooping) {
+      const video = videoRef.current;
+      if (video) {
+        video.currentTime = 0;
+        video.play().then(() => setIsPlaying(true)).catch(() => {});
+      }
+    } else {
+      // Auto-play next video
+      goToNextVideo();
+    }
   }
 
   function handleSeek(event) {
@@ -399,6 +504,27 @@ export default function VideoPage({
     video.currentTime = newTime;
     setCurrentTime(newTime);
   }, []);
+
+  const supportsFloatingWindow =
+    typeof document !== 'undefined' &&
+    !!document.pictureInPictureEnabled &&
+    typeof HTMLVideoElement !== 'undefined' &&
+    typeof HTMLVideoElement.prototype.requestPictureInPicture === 'function';
+
+  const toggleFloatingWindow = useCallback(async () => {
+    const video = videoRef.current;
+    if (!video || !supportsFloatingWindow) return;
+
+    try {
+      if (document.pictureInPictureElement === video) {
+        await document.exitPictureInPicture();
+      } else {
+        await video.requestPictureInPicture();
+      }
+    } catch {
+      // Ignore unsupported or blocked picture-in-picture transitions.
+    }
+  }, [supportsFloatingWindow]);
 
   const goToPreviousVideo = useCallback(() => {
     if (!sortedItems.length || selectedVideoId == null) return;
@@ -445,6 +571,31 @@ export default function VideoPage({
     };
   }, []);
 
+  // Keep floating-window UI state in sync with Picture-in-Picture events.
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) {
+      setIsFloatingWindow(false);
+      return;
+    }
+
+    function handlePiPEnter() {
+      setIsFloatingWindow(true);
+    }
+
+    function handlePiPLeave() {
+      setIsFloatingWindow(false);
+    }
+
+    video.addEventListener('enterpictureinpicture', handlePiPEnter);
+    video.addEventListener('leavepictureinpicture', handlePiPLeave);
+
+    return () => {
+      video.removeEventListener('enterpictureinpicture', handlePiPEnter);
+      video.removeEventListener('leavepictureinpicture', handlePiPLeave);
+    };
+  }, [selectedVideoSource]);
+
   // Idle-hide timer helpers for fullscreen controls
   function clearHideTimer() {
     if (hideTimerRef.current) {
@@ -473,13 +624,22 @@ export default function VideoPage({
     return () => clearHideTimer();
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (keyboardHintTimerRef.current) {
+        clearTimeout(keyboardHintTimerRef.current);
+        keyboardHintTimerRef.current = null;
+      }
+    };
+  }, []);
+
   // Wire keyboard controls for video playback.
   useEffect(() => {
     function handleKeyDown(event) {
       if (!sortedItems.length || !selectedVideo) return;
 
       const active = document.activeElement;
-      if (active && active.tagName === 'INPUT') {
+      if (isTypingElement(active)) {
         return;
       }
 
@@ -489,6 +649,7 @@ export default function VideoPage({
 
       if (key === ' ' || key === 'Spacebar') {
         event.preventDefault();
+        showKeyboardActionHint(isPlaying ? 'pause' : 'play');
         togglePlayPause();
         return;
       }
@@ -497,46 +658,59 @@ export default function VideoPage({
 
       if (lower === 'c') {
         event.preventDefault();
+        showKeyboardActionHint('prev');
         goToPreviousVideo();
         return;
       }
 
       if (lower === 'm') {
         event.preventDefault();
+        showKeyboardActionHint('next');
         goToNextVideo();
         return;
       }
 
       if (lower === 'v') {
         event.preventDefault();
+        showKeyboardActionHint('rewind');
         skipVideoRelative(-10);
         return;
       }
 
       if (lower === 'n') {
         event.preventDefault();
+        showKeyboardActionHint('forward');
         skipVideoRelative(10);
         return;
       }
 
       if (lower === 'b') {
         event.preventDefault();
+        showKeyboardActionHint('restart');
         restartVideo();
         return;
       }
 
       if (lower === 'f') {
         event.preventDefault();
+        showKeyboardActionHint(isFullscreen ? 'exitFullscreen' : 'fullscreen');
         toggleFullscreen();
+        return;
+      }
+
+      if (lower === 'l') {
+        event.preventDefault();
+        showKeyboardActionHint(isLooping ? 'loopOff' : 'loopOn');
+        toggleLooping();
         return;
       }
     }
 
-    window.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('keydown', handleKeyDown, true);
     return () => {
-      window.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('keydown', handleKeyDown, true);
     };
-  }, [sortedItems.length, selectedVideo, togglePlayPause, goToPreviousVideo, goToNextVideo, skipVideoRelative, toggleFullscreen]);
+  }, [sortedItems.length, selectedVideo, isPlaying, isFullscreen, isLooping, showKeyboardActionHint, togglePlayPause, goToPreviousVideo, goToNextVideo, skipVideoRelative, toggleFullscreen, toggleLooping]);
 
   // Wire media session API for hardware/media key controls.
   useEffect(() => {
@@ -614,6 +788,60 @@ export default function VideoPage({
       });
     };
   }, [togglePlayPause, goToPreviousVideo, goToNextVideo, skipVideoRelative]);
+
+  // Keep the browser/OS media controls (Media Session API) in sync
+  // with the current video's metadata.
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) {
+      return;
+    }
+
+    if (!selectedVideo) {
+      try {
+        navigator.mediaSession.metadata = null;
+      } catch {
+        // ignore
+      }
+      return;
+    }
+
+    const title = pickTitle(selectedVideo);
+    const album = pickFolderName(selectedVideo) || '';
+
+    try {
+      // eslint-disable-next-line no-undef
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title,
+        artist: 'Video',
+        album,
+        artwork: mediaSessionArtwork,
+      });
+    } catch {
+      // Some environments reject artwork URLs. Retry with text-only metadata.
+      try {
+        // eslint-disable-next-line no-undef
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title,
+          artist: 'Video',
+          album,
+        });
+      } catch {
+        // Some browsers may not support MediaMetadata fully; fail silently.
+      }
+    }
+  }, [selectedVideo, mediaSessionArtwork]);
+
+  // Reflect play/pause state in the Media Session API.
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) {
+      return;
+    }
+    try {
+      navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
+    } catch {
+      // ignore
+    }
+  }, [isPlaying]);
 
   function handlePlayVideo(item) {
     const id = getItemId(item);
@@ -781,7 +1009,7 @@ export default function VideoPage({
               </select>
               <button
                 type="button"
-                className="secondary"
+                className="icon-button sort-icon-button"
                 aria-label="Reverse current order"
                 onClick={() => setIsSortReversed((v) => !v)}
               >
@@ -790,7 +1018,7 @@ export default function VideoPage({
               <button
                 type="button"
                 className={
-                  'secondary sort-toggle' + (groupByFolder ? ' toggle-active' : '')
+                  'icon-button sort-icon-button sort-toggle' + (groupByFolder ? ' toggle-active' : '')
                 }
                 aria-pressed={groupByFolder ? 'true' : 'false'}
                 aria-label="Toggle grouping by folder"
@@ -821,6 +1049,7 @@ export default function VideoPage({
                     key={selectedVideoSource}
                     preload="metadata"
                     poster={selectedVideoPoster || undefined}
+                    loop={isLooping}
                     onClick={togglePlayPause}
                     onTimeUpdate={handleTimeUpdate}
                     onLoadedMetadata={handleLoadedMetadata}
@@ -840,6 +1069,11 @@ export default function VideoPage({
                     >
                       <Play size={48} fill="currentColor" stroke="none" />
                     </button>
+                  )}
+                  {keyboardActionHint && (
+                    <div className="video-shortcut-hint" role="status" aria-live="polite">
+                      {actionIcons[keyboardActionHint]}
+                    </div>
                   )}
                 </div>
 
@@ -905,6 +1139,17 @@ export default function VideoPage({
                       <span className="player-time">{formatTime(currentDuration)}</span>
                     </div>
                     <div className="player-controls-row">
+                      <div className="player-left-actions" aria-label="Loop control">
+                        <button
+                          type="button"
+                          className={`icon-button player-loop-button ${isLooping ? 'toggle-active' : ''}`}
+                          aria-label={isLooping ? 'Loop on' : 'Loop off'}
+                          title="Loop (L)"
+                          onClick={toggleLooping}
+                        >
+                          <Repeat size={18} />
+                        </button>
+                      </div>
                       <div className="player-controls" aria-label="Video playback controls">
                         <button
                           type="button"
@@ -952,14 +1197,26 @@ export default function VideoPage({
                           <SkipForward size={18} />
                         </button>
                       </div>
-                      <button
-                        type="button"
-                        className={`icon-button player-fullscreen-button ${isFullscreen ? 'toggle-active' : ''}`}
-                        aria-label={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
-                        onClick={toggleFullscreen}
-                      >
-                        {isFullscreen ? <Minimize size={18} /> : <Maximize size={18} />}
-                      </button>
+                      <div className="player-side-actions" aria-label="View controls">
+                        <button
+                          type="button"
+                          className={`icon-button player-floating-button ${isFloatingWindow ? 'toggle-active' : ''}`}
+                          aria-label={isFloatingWindow ? 'Disable floating window' : 'Floating window'}
+                          title={supportsFloatingWindow ? 'Floating window' : 'Floating window is not available'}
+                          onClick={toggleFloatingWindow}
+                          disabled={!supportsFloatingWindow}
+                        >
+                          <PictureInPicture2 size={18} />
+                        </button>
+                        <button
+                          type="button"
+                          className={`icon-button player-fullscreen-button ${isFullscreen ? 'toggle-active' : ''}`}
+                          aria-label={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+                          onClick={toggleFullscreen}
+                        >
+                          {isFullscreen ? <Minimize size={18} /> : <Maximize size={18} />}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </footer>

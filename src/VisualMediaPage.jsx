@@ -410,7 +410,7 @@ export default function VisualMediaPage({
               </select>
               <button
                 type="button"
-                className="secondary"
+                className="icon-button sort-icon-button"
                 aria-label="Reverse current order"
                 onClick={() => setIsSortReversed((v) => !v)}
               >
