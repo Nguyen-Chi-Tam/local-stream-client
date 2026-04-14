@@ -317,6 +317,7 @@ export default function MediaPage({ serverUrl, onChangeServer, onNavigate }) {
   const [isDraggingThumb, setIsDraggingThumb] = useState(false);
   const dragStartY = useRef(0);
   const dragStartScrollTop = useRef(0);
+  const scrollbarRafIdRef = useRef(0);
 
   const updateScrollbar = useCallback(() => {
     const list = musicListRef.current;
@@ -342,21 +343,33 @@ export default function MediaPage({ serverUrl, onChangeServer, onNavigate }) {
     list.parentElement.style.setProperty('--thumb-top', `${thumbTop}%`);
   }, []);
 
+  const queueScrollbarUpdate = useCallback(() => {
+    if (scrollbarRafIdRef.current) return;
+    scrollbarRafIdRef.current = window.requestAnimationFrame(() => {
+      scrollbarRafIdRef.current = 0;
+      updateScrollbar();
+    });
+  }, [updateScrollbar]);
+
   useEffect(() => {
     const list = musicListRef.current;
     if (list) {
-      list.addEventListener('scroll', updateScrollbar);
-      window.addEventListener('resize', updateScrollbar);
-      const observer = new MutationObserver(updateScrollbar);
+      list.addEventListener('scroll', queueScrollbarUpdate, { passive: true });
+      window.addEventListener('resize', queueScrollbarUpdate);
+      const observer = new MutationObserver(queueScrollbarUpdate);
       observer.observe(list, { childList: true, subtree: true });
-      updateScrollbar();
+      queueScrollbarUpdate();
       return () => {
-        list.removeEventListener('scroll', updateScrollbar);
-        window.removeEventListener('resize', updateScrollbar);
+        list.removeEventListener('scroll', queueScrollbarUpdate);
+        window.removeEventListener('resize', queueScrollbarUpdate);
         observer.disconnect();
+        if (scrollbarRafIdRef.current) {
+          window.cancelAnimationFrame(scrollbarRafIdRef.current);
+          scrollbarRafIdRef.current = 0;
+        }
       };
     }
-  }, [updateScrollbar, allItems]);
+  }, [queueScrollbarUpdate, allItems]);
 
   const handleThumbMouseMove = useCallback((e) => {
     const list = musicListRef.current;

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { AudioLines, Play, Pause, Rewind, FastForward, SkipBack, SkipForward, Folder, ChevronUp, ChevronDown, Maximize, Minimize, PictureInPicture2, Repeat } from 'lucide-react';
+import { AudioLines, Play, Pause, Rewind, FastForward, SkipBack, SkipForward, Folder, ChevronUp, ChevronDown, Maximize, Minimize, PictureInPicture2, Repeat, AppWindow, Square } from 'lucide-react';
 import { fetchMediaItemsCached, getMediaEndpoint } from './mediaApiCache.js';
 import {
   getItemId,
@@ -103,6 +103,7 @@ export default function VideoPage({
   const [currentTime, setCurrentTime] = useState(0);
   const [currentDuration, setCurrentDuration] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isWindowFullscreen, setIsWindowFullscreen] = useState(false);
   const [isFloatingWindow, setIsFloatingWindow] = useState(false);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [isPortraitVideo, setIsPortraitVideo] = useState(false);
@@ -401,9 +402,10 @@ export default function VideoPage({
     next: <SkipForward size={32} />, 
     rewind: <Rewind size={32} />, 
     forward: <FastForward size={32} />, 
-    restart: <AudioLines size={32} />, 
+    restart: <Square size={32} />, 
     fullscreen: <Maximize size={32} />, 
-    exitFullscreen: <Minimize size={32} />, 
+    exitFullscreen: <Minimize size={32} />,
+    windowFullscreen: <AppWindow size={32} />,
     loopOn: <Repeat size={32} color="#38bdf8" />, 
     loopOff: <Repeat size={32} color="#64748b" />,
   };
@@ -540,6 +542,16 @@ export default function VideoPage({
     handlePlayVideo(sortedItems[currentIdx + 1]);
   }, [sortedItems, selectedVideoId]);
 
+  const toggleWindowFullscreen = useCallback(() => {
+    setIsWindowFullscreen((prev) => {
+      const next = !prev;
+      if (next && document.fullscreenElement) {
+        document.exitFullscreen().catch(() => {});
+      }
+      return next;
+    });
+  }, []);
+
   // Fullscreen API
   const toggleFullscreen = useCallback(() => {
     const container = videoContainerRef.current;
@@ -548,9 +560,12 @@ export default function VideoPage({
     if (document.fullscreenElement) {
       document.exitFullscreen().catch(() => {});
     } else {
+      if (isWindowFullscreen) setIsWindowFullscreen(false);
       container.requestFullscreen().catch(() => {});
     }
-  }, []);
+  }, [isWindowFullscreen]);
+
+  const isVideoFullscreenView = isFullscreen || isWindowFullscreen;
 
   // Listen for fullscreen changes
   useEffect(() => {
@@ -607,17 +622,27 @@ export default function VideoPage({
   function resetHideTimer() {
     clearHideTimer();
     hideTimerRef.current = setTimeout(() => {
-      if (document.fullscreenElement) {
+      if (document.fullscreenElement || isWindowFullscreen) {
         setControlsVisible(false);
       }
     }, 3000);
   }
 
   function handleContainerMouseMove() {
-    if (!document.fullscreenElement) return;
+    if (!document.fullscreenElement && !isWindowFullscreen) return;
     setControlsVisible(true);
     resetHideTimer();
   }
+
+  useEffect(() => {
+    if (isWindowFullscreen) {
+      setControlsVisible(true);
+      resetHideTimer();
+    } else if (!document.fullscreenElement) {
+      setControlsVisible(true);
+      clearHideTimer();
+    }
+  }, [isWindowFullscreen]);
 
   // Clean up timer on unmount
   useEffect(() => {
@@ -698,6 +723,13 @@ export default function VideoPage({
         return;
       }
 
+      if (lower === 'w') {
+        event.preventDefault();
+        showKeyboardActionHint('windowFullscreen');
+        toggleWindowFullscreen();
+        return;
+      }
+
       if (lower === 'l') {
         event.preventDefault();
         showKeyboardActionHint(isLooping ? 'loopOff' : 'loopOn');
@@ -710,7 +742,7 @@ export default function VideoPage({
     return () => {
       document.removeEventListener('keydown', handleKeyDown, true);
     };
-  }, [sortedItems.length, selectedVideo, isPlaying, isFullscreen, isLooping, showKeyboardActionHint, togglePlayPause, goToPreviousVideo, goToNextVideo, skipVideoRelative, toggleFullscreen, toggleLooping]);
+  }, [sortedItems.length, selectedVideo, isPlaying, isFullscreen, isWindowFullscreen, isLooping, showKeyboardActionHint, togglePlayPause, goToPreviousVideo, goToNextVideo, skipVideoRelative, toggleFullscreen, toggleWindowFullscreen, toggleLooping]);
 
   // Wire media session API for hardware/media key controls.
   useEffect(() => {
@@ -1034,8 +1066,9 @@ export default function VideoPage({
             className={
               'video-player-container' +
               (isFullscreen ? ' video-player-fullscreen' : '') +
-              (isFullscreen && isPortraitVideo ? ' video-portrait' : '') +
-              (isFullscreen && !controlsVisible ? ' video-cursor-hidden' : '')
+              (isWindowFullscreen ? ' video-player-window-fullscreen' : '') +
+              (isVideoFullscreenView && isPortraitVideo ? ' video-portrait' : '') +
+              (isVideoFullscreenView && !controlsVisible ? ' video-cursor-hidden' : '')
             }
             ref={videoContainerRef}
             hidden={!selectedVideo}
@@ -1081,12 +1114,12 @@ export default function VideoPage({
                 <footer
                   className={
                     'player video-player-footer' +
-                    (isFullscreen ? ' video-footer-floating' : '') +
-                    (isFullscreen && !controlsVisible ? ' video-footer-hidden' : '')
+                    (isVideoFullscreenView ? ' video-footer-floating' : '') +
+                    (isVideoFullscreenView && !controlsVisible ? ' video-footer-hidden' : '')
                   }
                   id="video-player"
-                  onMouseEnter={() => { if (isFullscreen) { setControlsVisible(true); clearHideTimer(); } }}
-                  onMouseLeave={() => { if (isFullscreen) resetHideTimer(); }}
+                  onMouseEnter={() => { if (isVideoFullscreenView) { setControlsVisible(true); clearHideTimer(); } }}
+                  onMouseLeave={() => { if (isVideoFullscreenView) resetHideTimer(); }}
                 >
                   {selectedVideo && (
                     <div
@@ -1139,7 +1172,7 @@ export default function VideoPage({
                       <span className="player-time">{formatTime(currentDuration)}</span>
                     </div>
                     <div className="player-controls-row">
-                      <div className="player-left-actions" aria-label="Loop control">
+                      <div className="player-left-actions" aria-label="Left controls">
                         <button
                           type="button"
                           className={`icon-button player-loop-button ${isLooping ? 'toggle-active' : ''}`}
@@ -1148,6 +1181,16 @@ export default function VideoPage({
                           onClick={toggleLooping}
                         >
                           <Repeat size={18} />
+                        </button>
+                        <button
+                          type="button"
+                          className={`icon-button player-floating-button ${isFloatingWindow ? 'toggle-active' : ''}`}
+                          aria-label={isFloatingWindow ? 'Disable floating window' : 'Floating window'}
+                          title={supportsFloatingWindow ? 'Floating window' : 'Floating window is not available'}
+                          onClick={toggleFloatingWindow}
+                          disabled={!supportsFloatingWindow}
+                        >
+                          <PictureInPicture2 size={18} />
                         </button>
                       </div>
                       <div className="player-controls" aria-label="Video playback controls">
@@ -1200,13 +1243,12 @@ export default function VideoPage({
                       <div className="player-side-actions" aria-label="View controls">
                         <button
                           type="button"
-                          className={`icon-button player-floating-button ${isFloatingWindow ? 'toggle-active' : ''}`}
-                          aria-label={isFloatingWindow ? 'Disable floating window' : 'Floating window'}
-                          title={supportsFloatingWindow ? 'Floating window' : 'Floating window is not available'}
-                          onClick={toggleFloatingWindow}
-                          disabled={!supportsFloatingWindow}
+                          className={`icon-button player-floating-button ${isWindowFullscreen ? 'toggle-active' : ''}`}
+                          aria-label={isWindowFullscreen ? 'Exit windowed fullscreen' : 'Windowed fullscreen'}
+                          title="Windowed Fullscreen (W)"
+                          onClick={toggleWindowFullscreen}
                         >
-                          <PictureInPicture2 size={18} />
+                          <AppWindow size={18} />
                         </button>
                         <button
                           type="button"
