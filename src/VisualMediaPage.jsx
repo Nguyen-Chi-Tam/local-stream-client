@@ -500,7 +500,10 @@ export default function VisualMediaPage({
                       </div>
                       <div className="music-main">
                         <div className={'music-title' + (isActive ? ' playing-title' : '')}>{title}</div>
-                        <div className="music-meta">{pickDuration(item)}</div>
+                        <div className="music-details">
+                          <div className="music-artist">Video</div>
+                          <div className="music-meta">{pickDuration(item)}</div>
+                        </div>
                       </div>
                       <div className="music-actions">
                         <button

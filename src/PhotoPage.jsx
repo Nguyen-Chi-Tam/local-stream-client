@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Folder, ChevronUp, ChevronDown, ArrowDownToLine, X } from 'lucide-react';
 import { fetchMediaItemsCached, getMediaEndpoint } from './mediaApiCache.js';
+import Header from './Header.jsx';
 import {
   getItemId,
   pickTitle,
@@ -318,57 +319,13 @@ export default function PhotoPage({
 
   return (
     <>
-      <header className="top-bar">
-        <div className="top-bar-left">
-          <h1>{pageTitle}</h1>
-          {serverUrl && (
-            <a
-              id="server-label"
-              className="server-label"
-              href={serverUrl}
-              target="_blank"
-              rel="noreferrer"
-            >
-              {`Connected to ${serverUrl}`}
-            </a>
-          )}
-        </div>
-        <div className="top-bar-center">
-          <div className="media-nav" role="tablist" aria-label="Media sections">
-            <button
-              type="button"
-              className="secondary"
-              onClick={() => onNavigate('/media')}
-            >
-              Music
-            </button>
-            <button
-              type="button"
-              className="secondary"
-              onClick={() => onNavigate('/media/video')}
-            >
-              Video
-            </button>
-            <button
-              type="button"
-              className="secondary media-nav-active"
-              onClick={() => onNavigate('/media/photo')}
-            >
-              Photo
-            </button>
-          </div>
-        </div>
-        <div className="top-bar-right">
-          <button
-            id="change-server"
-            className="secondary"
-            type="button"
-            onClick={onChangeServer}
-          >
-            Change Server
-          </button>
-        </div>
-      </header>
+      <Header
+        title={pageTitle}
+        serverUrl={serverUrl}
+        activeSection="photo"
+        onNavigate={onNavigate}
+        onChangeServer={onChangeServer}
+      />
 
       <main className="page">
         <section className="card full">
