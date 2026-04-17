@@ -299,10 +299,16 @@ export default function PhotoPage({
           targetAddressSpace: 'private'
         });
       } catch (err) {
-        response = await fetch(selectedPhotoUrl, { 
-          mode: 'cors',
-          targetAddressSpace: 'local'
-        });
+        try {
+          response = await fetch(selectedPhotoUrl, { 
+            mode: 'cors',
+            targetAddressSpace: 'local'
+          });
+        } catch (err2) {
+          response = await fetch(selectedPhotoUrl, { 
+            mode: 'cors'
+          });
+        }
       }
       if (!response.ok) throw new Error('Failed to fetch image');
 

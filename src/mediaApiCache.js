@@ -44,14 +44,20 @@ export async function fetchMediaItemsCached(serverUrl, options = {}) {
     return existing.promise;
   }
 
+  const fetchOptions = {
+    headers: { Accept: 'application/json' }
+  };
+
   const pending = fetch(endpoint, {
-    headers: { Accept: 'application/json' },
-    targetAddressSpace: 'private', // For private IPs (192.168.x.x)
-  }).catch(() => {
-    // Fallback for localhost
+    ...fetchOptions,
+    targetAddressSpace: 'private'
+  }).catch((err) => {
     return fetch(endpoint, {
-      headers: { Accept: 'application/json' },
-      targetAddressSpace: 'local',
+      ...fetchOptions,
+      targetAddressSpace: 'local'
+    }).catch(() => {
+      // Final fallback without targetAddressSpace
+      return fetch(endpoint, fetchOptions);
     });
   })
     .then((response) => {
