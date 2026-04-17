@@ -292,7 +292,18 @@ export default function PhotoPage({
     const filename = buildPhotoFilename(selectedItem || {}, selectedPhotoUrl);
 
     try {
-      const response = await fetch(selectedPhotoUrl, { mode: 'cors' });
+      let response;
+      try {
+        response = await fetch(selectedPhotoUrl, { 
+          mode: 'cors',
+          targetAddressSpace: 'private'
+        });
+      } catch (err) {
+        response = await fetch(selectedPhotoUrl, { 
+          mode: 'cors',
+          targetAddressSpace: 'local'
+        });
+      }
       if (!response.ok) throw new Error('Failed to fetch image');
 
       const blob = await response.blob();
