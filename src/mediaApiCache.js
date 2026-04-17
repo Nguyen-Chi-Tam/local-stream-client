@@ -48,15 +48,22 @@ export async function fetchMediaItemsCached(serverUrl, options = {}) {
     headers: { Accept: 'application/json' }
   };
 
+  /**
+   * PNA bypass logic: 
+   * We attempt to fetch using 'targetAddressSpace: private' first. 
+   * If that fails (or isn't supported), we try 'local'. 
+   * Finally, we fall back to a standard fetch.
+   */
   const pending = fetch(endpoint, {
     ...fetchOptions,
     targetAddressSpace: 'private'
   }).catch((err) => {
+    console.warn("PNA 'private' fetch failed, trying 'local'...", err);
     return fetch(endpoint, {
       ...fetchOptions,
       targetAddressSpace: 'local'
     }).catch(() => {
-      // Final fallback without targetAddressSpace
+      // Final fallback without targetAddressSpace for environments that don't support it
       return fetch(endpoint, fetchOptions);
     });
   })
