@@ -5,16 +5,16 @@
   "private": true,
   "main": "electron/main.js",
   "scripts": {
-  "dev": "vite",
-  "build": "vite build",
-  "build:web": "vite build", 
-  "build:electron": "vite build --base=./",
-  "preview": "vite preview",
-  "electron:dev": "npm run build:electron && electron .",
-  "electron:build": "npm run build:electron && electron-builder --config electron-builder.yml",
-  "predeploy": "npm run build:web",
-  "deploy": "gh-pages -d dist"
-},
+    "dev": "vite",
+    "build": "vite build",
+    "build:web": "vite build --base=/local-stream-client/",
+    "build:electron": "vite build --base=./",
+    "preview": "vite preview",
+    "electron:dev": "npm run build:electron && electron .",
+    "electron:build": "npm run build:electron && electron-builder --config electron-builder.yml",
+    "predeploy":"npm run build:web",
+    "deploy":"gh-pages -d dist"
+  },
   "dependencies": {
     "cors": "^2.8.6",
     "express": "^4.19.2",
