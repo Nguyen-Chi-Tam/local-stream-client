@@ -46,6 +46,7 @@ export async function fetchMediaItemsCached(serverUrl, options = {}) {
 
   const pending = fetch(endpoint, {
     headers: { Accept: 'application/json' },
+    targetAddressSpace: 'private', // Add this line
   })
     .then((response) => {
       if (!response.ok) {
