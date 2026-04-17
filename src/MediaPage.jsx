@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Shuffle, Repeat, SkipBack, SkipForward, Play, AudioLines, Pause, Rewind, FastForward, ChevronUp, ChevronDown, Folder } from 'lucide-react';
 import defaultArt from '/default-art.png';
 import { fetchMediaItemsCached, getMediaEndpoint } from './mediaApiCache.js';
+import Header from './Header.jsx';
 
 const STORAGE_KEY = 'localstream_server_url';
 const SETTINGS_KEY = 'localstream_settings';
@@ -1020,57 +1021,13 @@ export default function MediaPage({ serverUrl, onChangeServer, onNavigate }) {
 
   return (
     <>
-      <header className="top-bar">
-        <div className="top-bar-left">
-          <h1>My Music</h1>
-          {serverUrl && (
-            <a
-              id="server-label"
-              className="server-label"
-              href={serverUrl}
-              target="_blank"
-              rel="noreferrer"
-            >
-              {`Connected to ${serverUrl}`}
-            </a>
-          )}
-        </div>
-        <div className="top-bar-center">
-          <div className="media-nav" role="tablist" aria-label="Media sections">
-            <button
-              type="button"
-              className="secondary media-nav-active"
-              onClick={() => onNavigate('/media')}
-            >
-              Music
-            </button>
-            <button
-              type="button"
-              className="secondary"
-              onClick={() => onNavigate('/media/video')}
-            >
-              Video
-            </button>
-            <button
-              type="button"
-              className="secondary"
-              onClick={() => onNavigate('/media/photo')}
-            >
-              Photo
-            </button>
-          </div>
-        </div>
-        <div className="top-bar-right">
-          <button
-            id="change-server"
-            className="secondary"
-            type="button"
-            onClick={onChangeServer}
-          >
-            Change Server
-          </button>
-        </div>
-      </header>
+      <Header
+        title="My Music"
+        serverUrl={serverUrl}
+        activeSection="music"
+        onNavigate={onNavigate}
+        onChangeServer={onChangeServer}
+      />
 
       <main className="page">
         <section className="card full">
@@ -1210,8 +1167,10 @@ export default function MediaPage({ serverUrl, onChangeServer, onNavigate }) {
                               >
                                 {pickTitle(item)}
                               </div>
-                              <div className="music-artist">{pickArtist(item)}</div>
-                              <div className="music-meta">{pickDuration(item)}</div>
+                              <div className="music-details">
+                                <div className="music-artist">{pickArtist(item)}</div>
+                                <div className="music-meta">{pickDuration(item)}</div>
+                              </div>
                             </div>
                             <div className="music-actions">
                               <button
@@ -1266,8 +1225,10 @@ export default function MediaPage({ serverUrl, onChangeServer, onNavigate }) {
                           >
                             {pickTitle(item)}
                           </div>
-                          <div className="music-artist">{pickArtist(item)}</div>
-                          <div className="music-meta">{pickDuration(item)}</div>
+                          <div className="music-details">
+                            <div className="music-artist">{pickArtist(item)}</div>
+                            <div className="music-meta">{pickDuration(item)}</div>
+                          </div>
                         </div>
                         <div className="music-actions">
                           <button
