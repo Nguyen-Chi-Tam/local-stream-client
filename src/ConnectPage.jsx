@@ -136,7 +136,7 @@ export default function ConnectPage({ onConnected }) {
 
         <div className="connect-extra">
           <div className="connect-download-row">
-            {/* <a
+            <a
               href="https://play.google.com/store/apps/details?id=com.jeet_studio.localstream4k&hl=en"
               target="_blank"
               rel="noopener noreferrer"
@@ -151,7 +151,7 @@ export default function ConnectPage({ onConnected }) {
               className="connect-desktop-link"
             >
               Download LocalStream Client for Windows
-            </a> */}
+            </a>
           </div>
 
           <div className="connect-guide-grid">
