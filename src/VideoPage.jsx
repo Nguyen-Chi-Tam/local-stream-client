@@ -83,6 +83,75 @@ function isTypingElement(el) {
   return !el.readOnly && !el.disabled;
 }
 
+function detectMobileViewport() {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return false;
+
+  const ua = String(navigator.userAgent || '');
+  const uaDataMobile = !!navigator.userAgentData?.mobile;
+  const uaMobile = /Android|iPhone|iPad|iPod|Mobile|Windows Phone/i.test(ua);
+  const coarsePointer =
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(hover: none) and (pointer: coarse)').matches;
+  const touchScreen = Number(navigator.maxTouchPoints || 0) > 0;
+
+  return uaDataMobile || uaMobile || (coarsePointer && touchScreen);
+}
+
+function detectTouchInput() {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return false;
+
+  const touchPoints = Number(navigator.maxTouchPoints || 0) > 0;
+  const touchEvent = 'ontouchstart' in window;
+  const coarsePointer =
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(pointer: coarse)').matches;
+
+  return touchPoints || touchEvent || coarsePointer;
+}
+
+function getFullscreenElement() {
+  if (typeof document === 'undefined') return null;
+
+  return (
+    document.fullscreenElement ||
+    document.webkitFullscreenElement ||
+    document.msFullscreenElement ||
+    null
+  );
+}
+
+function exitAnyFullscreen() {
+  if (typeof document === 'undefined') return Promise.resolve();
+
+  if (typeof document.exitFullscreen === 'function') {
+    return document.exitFullscreen();
+  }
+  if (typeof document.webkitExitFullscreen === 'function') {
+    return document.webkitExitFullscreen();
+  }
+  if (typeof document.msExitFullscreen === 'function') {
+    return document.msExitFullscreen();
+  }
+
+  return Promise.resolve();
+}
+
+function requestElementFullscreen(el) {
+  if (!el) return Promise.resolve();
+
+  if (typeof el.requestFullscreen === 'function') {
+    return el.requestFullscreen();
+  }
+  if (typeof el.webkitRequestFullscreen === 'function') {
+    return el.webkitRequestFullscreen();
+  }
+  if (typeof el.msRequestFullscreen === 'function') {
+    return el.msRequestFullscreen();
+  }
+
+  return Promise.resolve();
+}
+
 export default function VideoPage({
   serverUrl,
   onChangeServer,
@@ -108,8 +177,11 @@ export default function VideoPage({
   const [isFloatingWindow, setIsFloatingWindow] = useState(false);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [isPortraitVideo, setIsPortraitVideo] = useState(false);
+  const [videoAspectRatio, setVideoAspectRatio] = useState(16 / 9);
   const [isLooping, setIsLooping] = useState(false);
   const [keyboardActionHint, setKeyboardActionHint] = useState(null);
+  const [isMobileViewport, setIsMobileViewport] = useState(() => detectMobileViewport());
+  const [isTouchInput, setIsTouchInput] = useState(() => detectTouchInput());
 
   const videoRef = useRef(null);
   const videoContainerRef = useRef(null);
@@ -118,6 +190,7 @@ export default function VideoPage({
   const keyboardHintTimerRef = useRef(null);
   const musicListRef = useRef(null);
   const scrollTrackRef = useRef(null);
+  const fullscreenTouchStartRef = useRef(null);
   const [isDraggingThumb, setIsDraggingThumb] = useState(false);
   const dragStartY = useRef(0);
   const dragStartScrollTop = useRef(0);
@@ -374,8 +447,11 @@ export default function VideoPage({
       setIsPlaying(false);
       setCurrentTime(0);
       setCurrentDuration(0);
+      setVideoAspectRatio(16 / 9);
       return;
     }
+    setCurrentTime(0);
+    setIsPlaying(false);
     const metaDuration = pickDurationSeconds(selectedVideo);
     setCurrentDuration(metaDuration || 0);
   }, [selectedVideo]);
@@ -467,6 +543,10 @@ export default function VideoPage({
     // Detect portrait aspect ratio
     if (video.videoWidth && video.videoHeight) {
       setIsPortraitVideo(video.videoHeight > video.videoWidth);
+      const ratio = video.videoWidth / video.videoHeight;
+      if (Number.isFinite(ratio) && ratio > 0) {
+        setVideoAspectRatio(ratio);
+      }
     }
   }
 
@@ -514,6 +594,8 @@ export default function VideoPage({
     typeof HTMLVideoElement !== 'undefined' &&
     typeof HTMLVideoElement.prototype.requestPictureInPicture === 'function';
 
+  const canUseWindowFullscreen = !isMobileViewport;
+
   const toggleFloatingWindow = useCallback(async () => {
     const video = videoRef.current;
     if (!video || !supportsFloatingWindow) return;
@@ -544,25 +626,42 @@ export default function VideoPage({
   }, [sortedItems, selectedVideoId]);
 
   const toggleWindowFullscreen = useCallback(() => {
+    if (!canUseWindowFullscreen) return;
     setIsWindowFullscreen((prev) => {
       const next = !prev;
-      if (next && document.fullscreenElement) {
-        document.exitFullscreen().catch(() => {});
+      if (next && getFullscreenElement()) {
+        Promise.resolve(exitAnyFullscreen()).catch(() => {});
       }
       return next;
     });
-  }, []);
+  }, [canUseWindowFullscreen]);
 
   // Fullscreen API
   const toggleFullscreen = useCallback(() => {
     const container = videoContainerRef.current;
     if (!container) return;
 
-    if (document.fullscreenElement) {
-      document.exitFullscreen().catch(() => {});
+    if (getFullscreenElement()) {
+      Promise.resolve(exitAnyFullscreen()).catch(() => {});
     } else {
       if (isWindowFullscreen) setIsWindowFullscreen(false);
-      container.requestFullscreen().catch(() => {});
+
+      Promise.resolve(requestElementFullscreen(container))
+        .then(() => {
+          // If element fullscreen is unavailable on this mobile browser,
+          // fallback to native video fullscreen where supported (iOS/WebKit).
+          if (!getFullscreenElement()) {
+            const video = videoRef.current;
+            if (video && typeof video.webkitEnterFullscreen === 'function') {
+              try {
+                video.webkitEnterFullscreen();
+              } catch {
+                // ignore unsupported native fullscreen transitions
+              }
+            }
+          }
+        })
+        .catch(() => {});
     }
   }, [isWindowFullscreen]);
 
@@ -571,7 +670,7 @@ export default function VideoPage({
   // Listen for fullscreen changes
   useEffect(() => {
     function handleFullscreenChange() {
-      const fs = !!document.fullscreenElement;
+      const fs = !!getFullscreenElement();
       setIsFullscreen(fs);
       if (fs) {
         setControlsVisible(true);
@@ -582,10 +681,78 @@ export default function VideoPage({
       }
     }
     document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
     return () => {
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
     };
   }, []);
+
+  // iOS native video fullscreen does not always fire document fullscreen events.
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    function handleNativeFullscreenEnter() {
+      setIsFullscreen(true);
+      setControlsVisible(true);
+      resetHideTimer();
+    }
+
+    function handleNativeFullscreenLeave() {
+      if (!getFullscreenElement()) {
+        setIsFullscreen(false);
+        setControlsVisible(true);
+        clearHideTimer();
+      }
+    }
+
+    video.addEventListener('webkitbeginfullscreen', handleNativeFullscreenEnter);
+    video.addEventListener('webkitendfullscreen', handleNativeFullscreenLeave);
+
+    return () => {
+      video.removeEventListener('webkitbeginfullscreen', handleNativeFullscreenEnter);
+      video.removeEventListener('webkitendfullscreen', handleNativeFullscreenLeave);
+    };
+  }, [selectedVideoSource]);
+
+  // Track mobile viewport capabilities so windowed fullscreen can be disabled on phones.
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    const query = window.matchMedia('(hover: none) and (pointer: coarse)');
+
+    const handleChange = () => {
+      setIsMobileViewport(detectMobileViewport());
+      setIsTouchInput(detectTouchInput());
+    };
+
+    handleChange();
+    query.addEventListener('change', handleChange);
+    return () => {
+      query.removeEventListener('change', handleChange);
+    };
+  }, []);
+
+  // Ensure windowed fullscreen is never active on mobile viewports.
+  useEffect(() => {
+    if (!canUseWindowFullscreen && isWindowFullscreen) {
+      setIsWindowFullscreen(false);
+    }
+  }, [canUseWindowFullscreen, isWindowFullscreen]);
+
+  // Prevent page scroll when app-level fullscreen overlay is active.
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+
+    if (!isWindowFullscreen) return;
+
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [isWindowFullscreen]);
 
   // Keep floating-window UI state in sync with Picture-in-Picture events.
   useEffect(() => {
@@ -623,14 +790,52 @@ export default function VideoPage({
   function resetHideTimer() {
     clearHideTimer();
     hideTimerRef.current = setTimeout(() => {
-      if (document.fullscreenElement || isWindowFullscreen) {
+      if (getFullscreenElement() || isWindowFullscreen) {
         setControlsVisible(false);
       }
     }, 3000);
   }
 
   function handleContainerMouseMove() {
-    if (!document.fullscreenElement && !isWindowFullscreen) return;
+    if (!getFullscreenElement() && !isWindowFullscreen) return;
+    setControlsVisible(true);
+    resetHideTimer();
+  }
+
+  function handleVideoScreenTouchStart(event) {
+    if (!isTouchInput || !isVideoFullscreenView) return;
+    const touch = event.touches && event.touches[0];
+    if (!touch) return;
+
+    fullscreenTouchStartRef.current = {
+      x: touch.clientX,
+      y: touch.clientY,
+    };
+  }
+
+  function handleVideoScreenTouchEnd(event) {
+    if (!isTouchInput || !isVideoFullscreenView) return;
+    const start = fullscreenTouchStartRef.current;
+    fullscreenTouchStartRef.current = null;
+    if (!start) return;
+
+    const touch = event.changedTouches && event.changedTouches[0];
+    if (!touch) return;
+
+    const deltaX = touch.clientX - start.x;
+    const deltaY = touch.clientY - start.y;
+    const absX = Math.abs(deltaX);
+    const absY = Math.abs(deltaY);
+
+    // Intentional vertical swipe only.
+    if (absY < 48 || absY < absX * 1.2) return;
+
+    if (deltaY > 0) {
+      setControlsVisible(false);
+      clearHideTimer();
+      return;
+    }
+
     setControlsVisible(true);
     resetHideTimer();
   }
@@ -639,7 +844,7 @@ export default function VideoPage({
     if (isWindowFullscreen) {
       setControlsVisible(true);
       resetHideTimer();
-    } else if (!document.fullscreenElement) {
+    } else if (!getFullscreenElement()) {
       setControlsVisible(true);
       clearHideTimer();
     }
@@ -724,7 +929,7 @@ export default function VideoPage({
         return;
       }
 
-      if (lower === 'w') {
+      if (lower === 'w' && canUseWindowFullscreen) {
         event.preventDefault();
         showKeyboardActionHint('windowFullscreen');
         toggleWindowFullscreen();
@@ -743,7 +948,7 @@ export default function VideoPage({
     return () => {
       document.removeEventListener('keydown', handleKeyDown, true);
     };
-  }, [sortedItems.length, selectedVideo, isPlaying, isFullscreen, isWindowFullscreen, isLooping, showKeyboardActionHint, togglePlayPause, goToPreviousVideo, goToNextVideo, skipVideoRelative, toggleFullscreen, toggleWindowFullscreen, toggleLooping]);
+  }, [sortedItems.length, selectedVideo, isPlaying, isFullscreen, isWindowFullscreen, isVideoFullscreenView, isLooping, canUseWindowFullscreen, showKeyboardActionHint, togglePlayPause, goToPreviousVideo, goToNextVideo, skipVideoRelative, toggleFullscreen, toggleWindowFullscreen, toggleLooping]);
 
   // Wire media session API for hardware/media key controls.
   useEffect(() => {
@@ -1025,32 +1230,38 @@ export default function VideoPage({
           <section
             className={
               'video-player-container' +
+              (isMobileViewport ? ' video-mobile-viewport' : '') +
               (isFullscreen ? ' video-player-fullscreen' : '') +
               (isWindowFullscreen ? ' video-player-window-fullscreen' : '') +
               (isVideoFullscreenView && isPortraitVideo ? ' video-portrait' : '') +
               (isVideoFullscreenView && !controlsVisible ? ' video-cursor-hidden' : '')
             }
+            style={{ '--video-aspect-ratio': videoAspectRatio }}
             ref={videoContainerRef}
             hidden={!selectedVideo}
             onMouseMove={handleContainerMouseMove}
           >
             {selectedVideo && (
               <>
-                <div className="video-screen-area">
+                <div
+                  className="video-screen-area"
+                  onTouchStart={handleVideoScreenTouchStart}
+                  onTouchEnd={handleVideoScreenTouchEnd}
+                >
                   <video
                     ref={videoRef}
-                    key={selectedVideoSource}
+                    src={selectedVideoSource}
                     preload="metadata"
                     poster={selectedVideoPoster || undefined}
                     loop={isLooping}
+                    playsInline
+                    webkit-playsinline="true"
                     onTimeUpdate={handleTimeUpdate}
                     onLoadedMetadata={handleLoadedMetadata}
                     onPlay={handleVideoPlay}
                     onPause={handleVideoPause}
                     onEnded={handleVideoEnded}
-                  >
-                    <source src={selectedVideoSource} />
-                  </video>
+                  />
                   {/* Play overlay when paused */}
                   {!isPlaying && (
                     <button
@@ -1089,20 +1300,7 @@ export default function VideoPage({
                   <div className="player-overlay" />
                   <div className="player-content">
                     <div className="player-main">
-                      {selectedVideo && (
-                        <div className="player-art">
-                          <img
-                            src={selectedVideoPoster}
-                            alt={pickTitle(selectedVideo)}
-                            onError={(event) => {
-                              const img = event.currentTarget;
-                              if (img.dataset.fallbackApplied === 'true') return;
-                              img.dataset.fallbackApplied = 'true';
-                              img.src = '/default-art.png';
-                            }}
-                          />
-                        </div>
-                      )}
+                      {/* Removed player-art thumbnail in controller */}
                       <div className="player-info">
                         <div id="video-current-title" className="player-title">
                           <button
@@ -1127,6 +1325,9 @@ export default function VideoPage({
                         step="1"
                         value={Math.min(currentTime, currentDuration || Number.MAX_SAFE_INTEGER)}
                         onChange={handleSeek}
+                        onInput={handleSeek}
+                        onTouchStart={(e) => e.stopPropagation()}
+                        style={{ touchAction: 'none' }}
                       />
                       <span className="player-time">{formatTime(currentDuration)}</span>
                     </div>
@@ -1200,15 +1401,17 @@ export default function VideoPage({
                         </button>
                       </div>
                       <div className="player-side-actions" aria-label="View controls">
-                        <button
-                          type="button"
-                          className={`icon-button player-floating-button ${isWindowFullscreen ? 'toggle-active' : ''}`}
-                          aria-label={isWindowFullscreen ? 'Exit windowed fullscreen' : 'Windowed fullscreen'}
-                          title="Windowed Fullscreen (W)"
-                          onClick={toggleWindowFullscreen}
-                        >
-                          <AppWindow size={18} />
-                        </button>
+                        {canUseWindowFullscreen && (
+                          <button
+                            type="button"
+                            className={`icon-button player-floating-button video-player-window-fullscreen-button ${isWindowFullscreen ? 'toggle-active' : ''}`}
+                            aria-label={isWindowFullscreen ? 'Exit windowed fullscreen' : 'Windowed fullscreen'}
+                            title="Windowed Fullscreen (W)"
+                            onClick={toggleWindowFullscreen}
+                          >
+                            <AppWindow size={18} />
+                          </button>
+                        )}
                         <button
                           type="button"
                           className={`icon-button player-fullscreen-button ${isFullscreen ? 'toggle-active' : ''}`}
