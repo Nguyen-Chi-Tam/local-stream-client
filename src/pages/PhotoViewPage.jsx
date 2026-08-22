@@ -83,6 +83,7 @@ export default function PhotoViewPage({
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
 
+  const overlayRef = useRef(null);
   const imageRef = useRef(null);
   const dragStateRef = useRef({
     isDragging: false,
@@ -93,8 +94,62 @@ export default function PhotoViewPage({
     panY: 0
   });
 
+  const zoomLevelRef = useRef(zoomLevel);
+  zoomLevelRef.current = zoomLevel;
+  const panRef = useRef(pan);
+  panRef.current = pan;
+
   useEffect(() => {
     setIsTouchDevice(window.matchMedia('(pointer: coarse)').matches);
+  }, []);
+
+  // Wheel zoom handler (non-passive to allow preventDefault)
+  useEffect(() => {
+    const el = overlayRef.current;
+    if (!el) return;
+
+    function handleWheel(e) {
+      // Don't zoom if user is scrolling inside controls
+      if (e.target.closest('.photo-overlay-zoom-controls, .photo-overlay-icon-button')) {
+        return;
+      }
+
+      e.preventDefault();
+      if (e.deltaY === 0) return;
+
+      const prevZoom = zoomLevelRef.current;
+      const factor = e.deltaY < 0 ? 1.18 : 0.85;
+      let nextZoom = Math.max(1, Math.min(5, prevZoom * factor));
+
+      if (nextZoom < 1.05) {
+        nextZoom = 1;
+      }
+
+      if (nextZoom === 1) {
+        setZoomLevel(1);
+        setPan({ x: 0, y: 0 });
+        dragStateRef.current.panX = 0;
+        dragStateRef.current.panY = 0;
+        return;
+      }
+
+      const rect = el.getBoundingClientRect();
+      const cursorX = e.clientX - (rect.left + rect.width / 2);
+      const cursorY = e.clientY - (rect.top + rect.height / 2);
+
+      const prevPan = panRef.current;
+      const scaleRatio = nextZoom / prevZoom;
+      const nextPanX = cursorX - (cursorX - prevPan.x) * scaleRatio;
+      const nextPanY = cursorY - (cursorY - prevPan.y) * scaleRatio;
+
+      dragStateRef.current.panX = nextPanX;
+      dragStateRef.current.panY = nextPanY;
+      setPan({ x: nextPanX, y: nextPanY });
+      setZoomLevel(nextZoom);
+    }
+
+    el.addEventListener('wheel', handleWheel, { passive: false });
+    return () => el.removeEventListener('wheel', handleWheel);
   }, []);
 
   // Current photo derived state
@@ -286,6 +341,7 @@ export default function PhotoViewPage({
 
   return (
     <div
+      ref={overlayRef}
       className="photo-overlay"
       onClick={() => {
         if (dragStateRef.current.distance < 5) goBack();

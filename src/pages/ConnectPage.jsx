@@ -1,6 +1,6 @@
 
 import React, { useRef, useState } from 'react';
-import { createLucideIcon, Mail, X, Play, Pause, SkipBack, SkipForward, Rewind, FastForward, RotateCcw } from 'lucide-react';
+import { createLucideIcon, Mail, X, Play, Pause, SkipBack, SkipForward, Rewind, FastForward, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react';
 
 // Brand icons removed in lucide-react 1.0+ - provided here as local SVGs
 const Youtube = createLucideIcon('Youtube', [
@@ -129,20 +129,13 @@ export default function ConnectPage({ onConnected }) {
 
   const getNavStates = (text) => {
     const ranges = getNumberRanges(text);
-    const states = [];
-    for (let i = 0; i < ranges.length; i += 1) {
-      const [start, end] = ranges[i];
-      // At the left of number (caret at start)
-      states.push({ start, end: start });
-      // Select number (selection range start to end + 1)
-      states.push({ start, end: end + 1 });
-      // At the right of number (caret at end + 1)
-      states.push({ start: end + 1, end: end + 1 });
-    }
-    return states;
+    return ranges.map(([start, end]) => ({
+      start,
+      end: end + 1,
+    }));
   };
 
-  const moveToNumberEdge = (direction) => {
+  const moveToNumberPart = (direction) => {
     const input = inputRef.current;
     if (!input) return;
 
@@ -166,10 +159,15 @@ export default function ConnectPage({ onConnected }) {
         targetIndex = (currentIndex + 1) % states.length;
       }
     } else {
-      if (direction === 'prev') {
+      const insideIndex = states.findIndex(
+        (s) => cStart >= s.start && cEnd <= s.end
+      );
+
+      if (insideIndex !== -1) {
+        targetIndex = insideIndex;
+      } else if (direction === 'prev') {
         for (let i = states.length - 1; i >= 0; i -= 1) {
-          const s = states[i];
-          if (s.start < cStart || (s.start === cStart && s.end < cEnd)) {
+          if (states[i].end <= cStart) {
             targetIndex = i;
             break;
           }
@@ -179,8 +177,7 @@ export default function ConnectPage({ onConnected }) {
         }
       } else {
         for (let i = 0; i < states.length; i += 1) {
-          const s = states[i];
-          if (s.start > cStart || (s.start === cStart && s.end > cEnd)) {
+          if (states[i].start >= cEnd) {
             targetIndex = i;
             break;
           }
@@ -287,20 +284,22 @@ export default function ConnectPage({ onConnected }) {
                     <button
                       type="button"
                       className="label-nav-button"
-                      onClick={() => moveToNumberEdge('prev')}
-                      aria-label="Start of number"
+                      onClick={() => moveToNumberPart('prev')}
+                      aria-label="Select previous number"
+                      title="Select previous number"
                       disabled={!hasDigits}
                     >
-                      &lt;
+                      <ChevronLeft size={14} />
                     </button>
                     <button
                       type="button"
                       className="label-nav-button"
-                      onClick={() => moveToNumberEdge('next')}
-                      aria-label="End of number"
+                      onClick={() => moveToNumberPart('next')}
+                      aria-label="Select next number"
+                      title="Select next number"
                       disabled={!hasDigits}
                     >
-                      &gt;
+                      <ChevronRight size={14} />
                     </button>
                   </div>
                 </div>
@@ -335,7 +334,7 @@ export default function ConnectPage({ onConnected }) {
                 <p className="hint">
                   This value never leaves your device — it&apos;s stored in your browser only.
                 </p>
-                <button type="submit">Continue</button>
+                <button type="submit" className="connect-submit-button">Continue</button>
               </form>
 
               {error && (
@@ -458,7 +457,7 @@ export default function ConnectPage({ onConnected }) {
                 </div>
                 <div>
                   <img src={startMusicImg} alt="Start streaming your music" />
-                  <p className="connect-guide-step-text">3. Hit Continue and start streaming your music.</p>
+                  <p className="connect-guide-step-text">3. Hit Continue and start streaming.</p>
                 </div>
                 <div className="connect-keyboard-guide">
                   <div className="connect-keyboard-title">Keyboard Shortcuts</div>
@@ -574,7 +573,7 @@ export default function ConnectPage({ onConnected }) {
 
       <footer className="connect-credit">
         <p className="connect-credit-text" style={{ marginBottom: '0.75rem' }}>
-          @2026 <a href="https://manjeetdeswal.github.io/Local-Stream-Upnp---Http-Server-/" className="connect-credit-link">LocalStream</a> is an app made by <a href="https://github.com/manjeetdeswal" className="connect-credit-link">Manjeet Deswal</a>
+          @2026 <a href="https://manjeetdeswal.github.io/Local-Stream-Upnp---Http-Server-/" target="_blank" rel="noopener noreferrer" className="connect-credit-link">LocalStream</a> is an app made by <a href="https://github.com/manjeetdeswal" target="_blank" rel="noopener noreferrer" className="connect-credit-link">Manjeet Deswal</a>
         </p>
         <p className="connect-credit-text">My social account:</p>
         <div className="connect-credit-links">

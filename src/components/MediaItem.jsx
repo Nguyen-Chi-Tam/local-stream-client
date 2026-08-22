@@ -179,7 +179,7 @@ const MediaItem = React.memo(({
               align="start"
               side="top"
               sideOffset={4}
-              className="w-48 bg-slate-900/95 border-slate-700/80 text-slate-100 backdrop-blur-md shadow-2xl z-[1000] p-1.5 rounded-xl animate-in fade-in-0 zoom-in-95"
+              className="w-48 backdrop-blur-md z-[1000]"
               onClick={(e) => e.stopPropagation()}
             >
               {((!isQueued && totalQueued > 0) || (isQueued && queuePos > 1)) && (

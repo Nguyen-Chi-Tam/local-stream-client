@@ -111,7 +111,7 @@ export default function FullscreenVideoPlayer({
   const MarqueeText = MarqueeTextComponent;
   const canMinimize = isTrueMobileDevice;
   const effectiveIsVideoMinimized = isVideoMinimized && canMinimize && !isVideoFullscreenView;
-  const shouldShowAmbient = !!selectedVideo && isVideoFullscreenView;
+  const shouldShowAmbient = !!selectedVideo;
   const shouldUseNormalAmbientLayout =
     isPortraitVideo || (Number.isFinite(videoAspectRatio) && videoAspectRatio < 1);
 
@@ -715,7 +715,7 @@ export default function FullscreenVideoPlayer({
         (isFullscreen ? ' video-player-fullscreen' : '') +
         (isWindowFullscreen ? ' video-player-window-fullscreen' : '') +
         (isPortraitVideo ? ' video-portrait' : '') +
-        (shouldUseNormalAmbientLayout && isVideoFullscreenView ? ' video-normal-ambient' : '') +
+        (shouldUseNormalAmbientLayout ? ' video-normal-ambient' : '') +
         (shouldHideControls ? ' video-cursor-hidden' : '') +
         (effectiveIsVideoMinimized ? ' video-player-minimized' : '')
       }

@@ -219,6 +219,7 @@ export default function PhotoPage({
 
   const searchInputRef = useRef(null);
   const searchHistoryAddedRef = useRef(false);
+  const selectionHistoryAddedRef = useRef(false);
   const photoListRef = useRef(null);
   const lastIncrementTimeRef = useRef(0);
 
@@ -252,32 +253,6 @@ export default function PhotoPage({
       searchHistoryAddedRef.current = false;
     }
   }, [searchQuery]);
-
-  useEffect(() => {
-    if (isElectron) return;
-
-    function handlePopState(e) {
-      if (isViewOpen) return;
-
-      const hasQuery = !!String(searchQuery || '').trim();
-      if (!hasQuery) return;
-
-      const state = e ? e.state : window.history.state;
-      if (state && state.__search) {
-        return;
-      }
-
-      setSearchQuery('');
-      if (searchInputRef.current) {
-        searchInputRef.current.blur();
-      }
-    }
-
-    window.addEventListener('popstate', handlePopState);
-    return () => {
-      window.removeEventListener('popstate', handlePopState);
-    };
-  }, [searchQuery, isViewOpen]);
 
   const [renderLimit, setRenderLimit] = useState(80);
   // thumbLimit gates actual image loading independently from DOM renderLimit.
@@ -426,6 +401,77 @@ export default function PhotoPage({
     setSelectedPhotoIds([]);
     setIsSelectionMode(false);
   }, [downloadProgress]);
+
+  // When selection mode is activated, push a history entry so the browser
+  // back button (and Escape) properly exit selection mode.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (isElectron) return;
+
+    if (isSelectionMode && !selectionHistoryAddedRef.current) {
+      const nextState = { ...(window.history.state || {}), __selection: true };
+      window.history.pushState(nextState, '', window.location.pathname);
+      selectionHistoryAddedRef.current = true;
+      showToast({ action: 'selection', message: 'Selection mode' });
+    }
+
+    if (!isSelectionMode && selectionHistoryAddedRef.current) {
+      selectionHistoryAddedRef.current = false;
+    }
+  }, [isSelectionMode]);
+
+  useEffect(() => {
+    if (isElectron) return;
+
+    function handlePopState(e) {
+      if (isViewOpen) return;
+
+      // If we were in selection mode and the user pressed back, exit it
+      const state = e ? e.state : window.history.state;
+      if (isSelectionMode && !(state && state.__selection)) {
+        clearPhotoSelection();
+        return;
+      }
+
+      const hasQuery = !!String(searchQuery || '').trim();
+      if (!hasQuery) return;
+
+      if (state && state.__search) {
+        return;
+      }
+
+      setSearchQuery('');
+      if (searchInputRef.current) {
+        searchInputRef.current.blur();
+      }
+    }
+
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [searchQuery, isViewOpen, isSelectionMode, clearPhotoSelection]);
+
+  // Escape key exits selection mode
+  useEffect(() => {
+    if (!isSelectionMode) return;
+
+    function handleKeyDown(e) {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        clearPhotoSelection();
+        // Also pop the history entry we pushed
+        if (selectionHistoryAddedRef.current && !isElectron) {
+          window.history.back();
+          selectionHistoryAddedRef.current = false;
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
+  }, [isSelectionMode, clearPhotoSelection]);
 
   const downloadSelectedPhotos = useCallback(async () => {
     if (!selectedPhotos.length || downloadProgress) return;
@@ -1012,7 +1058,7 @@ export default function PhotoPage({
                                           item={item}
                                           serverUrl={serverUrl}
                                           isSelected={selectedPhotoSet.has(selectionKey)}
-                                          onToggleSelect={togglePhotoSelection}
+                                          onToggleSelect={isSelectionMode ? togglePhotoSelection : undefined}
                                           canLoadImg={(renderedCount - visibleItems.length + idx) < thumbLimit}
 
                                           onClick={() => {
@@ -1046,7 +1092,7 @@ export default function PhotoPage({
                                 item={item}
                                 serverUrl={serverUrl}
                                 isSelected={selectedPhotoSet.has(selectionKey)}
-                                onToggleSelect={togglePhotoSelection}
+                                onToggleSelect={isSelectionMode ? togglePhotoSelection : undefined}
                                 canLoadImg={idx < thumbLimit}
 
                                 onClick={() => {

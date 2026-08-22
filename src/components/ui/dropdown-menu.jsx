@@ -36,7 +36,7 @@ function DropdownMenuContent({
         sideOffset={sideOffset}
         align={align}
         className={cn(
-          "z-[9999] min-w-44 origin-(--radix-dropdown-menu-content-transform-origin) overflow-hidden rounded-xl bg-slate-900 text-slate-100 p-1.5 shadow-2xl border border-slate-700/80 duration-100 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:overflow-hidden data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+          "z-[9999] min-w-44 overflow-hidden rounded-xl bg-slate-900 text-slate-100 p-1.5 shadow-2xl border border-slate-700/80 data-[state=closed]:overflow-hidden data-open:animate-in data-open:fade-in-0 data-open:slide-in-from-bottom-3 data-open:duration-200 data-open:ease-out data-closed:animate-out data-closed:fade-out-0 data-closed:slide-out-to-bottom-3 data-closed:duration-150 data-closed:ease-in",
           className
         )}
         {...props} />
@@ -212,7 +212,7 @@ function DropdownMenuSubContent({
       <DropdownMenuPrimitive.SubContent
         data-slot="dropdown-menu-sub-content"
         className={cn(
-          "z-[99999] min-w-44 origin-(--radix-dropdown-menu-content-transform-origin) overflow-hidden rounded-xl bg-slate-900/95 backdrop-blur-md text-slate-100 p-1.5 shadow-2xl border border-slate-700/80 duration-100 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+          "z-[99999] min-w-44 overflow-hidden rounded-xl bg-slate-900/95 backdrop-blur-md text-slate-100 p-1.5 shadow-2xl border border-slate-700/80 data-open:animate-in data-open:fade-in-0 data-open:slide-in-from-bottom-3 data-open:duration-200 data-open:ease-out data-closed:animate-out data-closed:fade-out-0 data-closed:slide-out-to-bottom-3 data-closed:duration-150 data-closed:ease-in",
           className
         )}
         {...props} />

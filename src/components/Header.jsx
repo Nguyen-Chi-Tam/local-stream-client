@@ -258,9 +258,17 @@ export default function Header({
     clearTimeout(p.finishTimer);
     const indicator = indicatorRef.current;
     const navWrap = navWrapRef.current;
-    if (indicator) indicator.classList.add('interacting');
+    if (indicator) {
+      indicator.classList.remove('pressing', 'sliding');
+      // Force reflow so the animation restarts cleanly
+      // eslint-disable-next-line no-unused-expressions
+      indicator.offsetWidth;
+      indicator.classList.add('interacting', 'pressing', 'sliding');
+    }
     if (navWrap) navWrap.classList.add('engaged');
     setGlow(e.clientX, e.clientY, 0.24);
+    // Immediately slide indicator toward the clicked tab
+    snapToIndex(idx, true);
 
     const onPointerMove = (moveEvent) => {
       if (moveEvent.pointerId !== p.pointerId) return;
@@ -300,15 +308,22 @@ export default function Header({
 
     const finishSelection = () => {
       if (navInnerRef.current) navInnerRef.current.classList.remove('dragging');
+      const indicator = indicatorRef.current;
+      if (indicator) {
+        indicator.classList.remove('pressing');
+        indicator.classList.add('sliding');
+      }
       snapToIndex(p.targetIndex, true);
       if (NAV_ITEMS[p.targetIndex] && NAV_ITEMS[p.targetIndex].id !== activeSection) {
         onNavigate(NAV_ITEMS[p.targetIndex].path);
       }
       p.finishTimer = setTimeout(() => {
-        if (indicatorRef.current) indicatorRef.current.classList.remove('interacting');
+        if (indicatorRef.current) {
+          indicatorRef.current.classList.remove('interacting', 'sliding');
+        }
         if (navWrapRef.current) navWrapRef.current.classList.remove('engaged');
         if (navInnerRef.current) navInnerRef.current.style.setProperty('--ga', '0');
-      }, 350);
+      }, 450);
     };
 
     const onPointerUp = (upEvent) => {
@@ -325,7 +340,7 @@ export default function Header({
       if (navInnerRef.current) navInnerRef.current.classList.remove('dragging');
       snapToIndex(activeIdx, true);
       p.finishTimer = setTimeout(() => {
-        if (indicatorRef.current) indicatorRef.current.classList.remove('interacting');
+        if (indicatorRef.current) indicatorRef.current.classList.remove('interacting', 'pressing', 'sliding');
         if (navWrapRef.current) navWrapRef.current.classList.remove('engaged');
         if (navInnerRef.current) navInnerRef.current.style.setProperty('--ga', '0');
       }, 350);
