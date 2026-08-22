@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { AudioLines, Play, MoreVertical, Download, ExternalLink, ListPlus, ListX, CornerUpLeft, Trash2 } from 'lucide-react';
+import { Play, MoreVertical, Download, ExternalLink, ListPlus, ListX, CornerUpLeft, Trash2 } from 'lucide-react';
+import DynamicIslandWaveform from './DynamicIslandWaveform.jsx';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -272,11 +273,11 @@ const MediaItem = React.memo(({
             <button
               type="button"
               className={isActive ? 'playing' : ''}
-              aria-label={isActive ? 'Playing' : 'Play'}
+              aria-label={isActive ? (isPlayingActive ? 'Pause' : 'Playing') : 'Play'}
               onClick={() => handleAction && handleAction(item)}
             >
               {isActive ? (
-                <AudioLines size={18} />
+                <DynamicIslandWaveform isPlaying={isPlayingActive !== false} />
               ) : (
                 <Play size={18} fill="currentColor" stroke="none" />
               )}
