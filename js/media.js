@@ -356,6 +356,30 @@
     return arr;
   }
 
+  function sortFolderNames(folderNames, groups) {
+    const names = (folderNames || []).slice();
+
+    if (sortKey !== 'date') {
+      return names.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+    }
+
+    const latestDateByFolder = new Map();
+    names.forEach((folder) => {
+      const latestDate = (groups[folder] || []).reduce(
+        (latest, item) => Math.max(latest, pickDateValue(item)),
+        0
+      );
+      latestDateByFolder.set(folder, latestDate);
+    });
+
+    return names.sort((a, b) => {
+      const ad = latestDateByFolder.get(a) || 0;
+      const bd = latestDateByFolder.get(b) || 0;
+      if (ad !== bd) return isSortReversed ? bd - ad : ad - bd;
+      return a.localeCompare(b, undefined, { sensitivity: 'base' });
+    });
+  }
+
   function playItemByIndex(index) {
     if (!audioEl || !playlistItems || !playlistItems.length) return;
     if (index < 0 || index >= playlistItems.length) return;
@@ -432,9 +456,7 @@
       groups[folder].push(item);
     });
 
-    const folderNames = Object.keys(groups).sort((a, b) =>
-      a.localeCompare(b, undefined, { sensitivity: 'base' })
-    );
+    const folderNames = sortFolderNames(Object.keys(groups), groups);
 
     const newPlaylist = [];
 

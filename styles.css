@@ -808,11 +808,8 @@ button.secondary:hover {
     0 2px 10px rgba(14, 165, 233, 0.25),
     0 0 14px rgba(56, 189, 248, 0.15);
   transition:
-    left 0.26s cubic-bezier(0.2, 0.9, 0.22, 1),
-    width 0.26s cubic-bezier(0.2, 0.9, 0.22, 1),
-    transform 0.25s ease,
-    background-color 0.25s ease,
-    box-shadow 0.25s ease;
+    left 0.2s cubic-bezier(0.2, 0.8, 0.2, 1),
+    width 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 @keyframes indicator-press {
@@ -829,7 +826,6 @@ button.secondary:hover {
 
 .tab-indicator.interacting {
   z-index: 2;
-  transform: scale(1.02);
   background: rgba(56, 189, 248, 0.32);
   border-color: rgba(255, 255, 255, 0.6);
   box-shadow:
@@ -837,18 +833,10 @@ button.secondary:hover {
     0 0 22px rgba(56, 189, 248, 0.3);
 }
 
-.tab-indicator.pressing {
-  animation: indicator-press 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
-}
-
 .tab-indicator.sliding {
   transition:
-    left 0.44s cubic-bezier(0.4, 0.0, 0.2, 1),
-    width 0.44s cubic-bezier(0.4, 0.0, 0.2, 1),
-    transform 0.3s cubic-bezier(0.4, 0.0, 0.2, 1),
-    background-color 0.3s ease,
-    box-shadow 0.3s ease;
-  animation: indicator-slide-settle 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.08s forwards;
+    left 0.2s cubic-bezier(0.2, 0.8, 0.2, 1),
+    width 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .ios26-nav-inner.dragging .tab-indicator {
@@ -916,6 +904,13 @@ button.secondary:hover {
   stroke: currentColor;
   opacity: 0.95;
   transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.ios-playback-time {
+  color: #f1f5f9;
+  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .ios-item:hover .ios-icon {
@@ -1025,6 +1020,14 @@ button.menu-button {
     color 0.2s ease,
     box-shadow 0.2s ease,
     background 0.2s ease !important;
+}
+
+.menu-button.playback-active,
+button.menu-button.playback-active {
+  width: auto;
+  min-width: 40px;
+  gap: 5px;
+  padding: 0 10px;
 }
 
 .menu-button:hover,
@@ -4339,6 +4342,28 @@ input[type='search']::-ms-reveal {
 .video-player-footer .player-main,
 .video-player-footer .player-info {
   gap: 0.6rem;
+}
+
+.video-player-footer .player-title-minimize-button {
+  display: none;
+  background: transparent !important;
+  color: #e5e7eb !important;
+  border: none !important;
+  box-shadow: none !important;
+  border-radius: 999px;
+}
+
+.video-player-footer .player-title-minimize-button:hover,
+.video-player-footer .player-title-minimize-button:active,
+.video-player-footer .player-title-minimize-button:focus-visible {
+  background: transparent !important;
+  color: #fff !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.video-player-footer .player-side-minimize-button {
+  display: inline-flex;
 }
 
 .video-player-footer .player-timeline {

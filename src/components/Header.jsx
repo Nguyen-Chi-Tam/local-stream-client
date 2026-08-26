@@ -5,6 +5,7 @@ import appIcon from '../../public/lsclient.png';
 import { fetchMediaItemsCached, getCachedMediaItems } from '../functions/mediaApiCache.js';
 import { getMediaType } from '../functions/mediaUtils.js';
 import { applyGlass, removeGlass, DEFAULT_SWITCHER_CONFIG } from '../lib/liquidGlass.js';
+import DynamicIslandWaveform from './DynamicIslandWaveform.jsx';
 
 const NAV_ITEMS = [
   { id: 'music', label: 'Music', path: '/media', icon: Music },
@@ -26,6 +27,8 @@ export default function Header({
   onNavigate,
   onChangeServer,
   reloadNonce,
+  isActivePage = true,
+  playbackSnapshot = null,
 }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [counts, setCounts] = useState({ music: null, video: null, photo: null });
@@ -109,6 +112,17 @@ export default function Header({
         ? title.replace(/\s*\(\d+\)$/, ` (${currentCount})`)
         : `${title} (${currentCount})`
       : title;
+
+  const playbackTime = Number(playbackSnapshot?.currentTime) || 0;
+  const formatPlaybackTime = (seconds) => {
+    const value = Math.max(0, Math.floor(seconds));
+    return `${Math.floor(value / 60)}:${String(value % 60).padStart(2, '0')}`;
+  };
+  const showPlaybackInMenu =
+    activeSection !== playbackSnapshot?.type &&
+    (playbackSnapshot?.type === 'music' || playbackSnapshot?.type === 'video') &&
+    playbackSnapshot.item &&
+    playbackSnapshot.isPlaying;
 
   // ── Desktop Liquid Glass Switcher Mechanics ───────────────────────────
   const navRect = useCallback(() => {
@@ -197,20 +211,38 @@ export default function Header({
 
   // Sync indicator on active section change and window resize
   useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      snapToIndex(activeIdx, true);
-    }, 16);
+    if (!isActivePage) return undefined;
+
+    let frameId = 0;
+    let attempts = 0;
+
+    const syncIndicator = () => {
+      const activeButton = itemsRef.current[activeIdx];
+      if (activeButton && activeButton.getBoundingClientRect().width > 0) {
+        snapToIndex(activeIdx, true);
+        return;
+      }
+
+      if (attempts < 10) {
+        attempts += 1;
+        frameId = requestAnimationFrame(syncIndicator);
+      }
+    };
+
+    frameId = requestAnimationFrame(syncIndicator);
 
     const handleResize = () => snapToIndex(activeIdx, false);
     window.addEventListener('resize', handleResize);
     return () => {
-      clearTimeout(timeoutId);
+      cancelAnimationFrame(frameId);
       window.removeEventListener('resize', handleResize);
     };
-  }, [activeIdx, snapToIndex]);
+  }, [activeIdx, isActivePage, snapToIndex]);
 
   // Initial indicator positioning and Liquid Glass attachment
   useEffect(() => {
+    if (!isActivePage) return undefined;
+
     const indicator = indicatorRef.current;
     if (indicator) {
       snapToIndex(activeIdx, false);
@@ -229,7 +261,7 @@ export default function Header({
       if (serverBtn) removeGlass(serverBtn);
       if (mobileBtn) removeGlass(mobileBtn);
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeIdx, isActivePage, snapToIndex]);
 
   // Drag and Pointer interaction for desktop navbar
   const pointerStateRef = useRef({
@@ -681,7 +713,7 @@ export default function Header({
           <h1>{displayTitle}</h1>
           {serverUrl && (
             <a className="server-label" href={serverUrl} target="_blank" rel="noreferrer">
-              {`Connected to ${serverUrl}`}
+              {`${serverUrl}`}
             </a>
           )}
         </div>
@@ -707,6 +739,12 @@ export default function Header({
             {NAV_ITEMS.map((item, idx) => {
               const Icon = item.icon;
               const isActive = activeSection === item.id;
+              const isPlaybackNav =
+                (item.id === 'music' || item.id === 'video') &&
+                activeSection !== item.id &&
+                playbackSnapshot?.type === item.id &&
+                playbackSnapshot.item &&
+                playbackSnapshot.isPlaying;
               return (
                 <button
                   key={item.id}
@@ -719,8 +757,20 @@ export default function Header({
                   onPointerDown={(e) => handlePointerDown(idx, e)}
                   onClick={() => handleNavigate(item.path)}
                 >
-                  <Icon className="ios-icon" size={17} />
-                  <span>{item.label}</span>
+                  {isPlaybackNav ? (
+                    <>
+                      <Icon className="ios-icon" size={17} />
+                      <DynamicIslandWaveform isPlaying={playbackSnapshot.isPlaying} size="sm" />
+                      <span className="ios-playback-time">
+                        {formatPlaybackTime(playbackTime)}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <Icon className="ios-icon" size={17} />
+                      <span>{item.label}</span>
+                    </>
+                  )}
                 </button>
               );
             })}
@@ -742,7 +792,7 @@ export default function Header({
         <div className="mobile-only" ref={menuRef}>
           <button
             ref={mobileMenuBtnRef}
-            className="menu-button liquid-glass-btn lg-demo-target"
+            className={`menu-button liquid-glass-btn lg-demo-target${showPlaybackInMenu ? ' playback-active' : ''}`}
             data-radius="999"
             style={{ touchAction: 'none' }}
             onPointerDown={handleMobileMenuPointerDown}
@@ -756,6 +806,12 @@ export default function Header({
             aria-label="Toggle menu"
             aria-expanded={isMenuOpen}
           >
+            {showPlaybackInMenu && (
+              <>
+                <DynamicIslandWaveform isPlaying={playbackSnapshot.isPlaying} size="sm" />
+                <span className="ios-playback-time">{formatPlaybackTime(playbackTime)}</span>
+              </>
+            )}
             {isMenuOpen ? <X size={20} /> : <Menu size={20} />}
           </button>
 

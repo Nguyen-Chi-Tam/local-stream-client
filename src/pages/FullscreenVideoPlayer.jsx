@@ -1047,7 +1047,7 @@ export default function FullscreenVideoPlayer({
                           className="player-title-button select-text"
                           onClick={scrollToCurrent}
                           text={selectedVideo ? pickTitle(selectedVideo) : ''}
-                          enabled={true}
+                          enabled={!isMobileViewport}
                         />
                       ) : (
                         <button
@@ -1058,6 +1058,17 @@ export default function FullscreenVideoPlayer({
                           {selectedVideo ? pickTitle(selectedVideo) : ''}
                         </button>
                       )}
+                    {canMinimize && !isVideoFullscreenView && (
+                      <button
+                        type="button"
+                        className="icon-button player-minimize-button player-title-minimize-button select-none"
+                        aria-label="Minimize video player"
+                        title="Minimize Video"
+                        onClick={() => onMinimizeToggle && onMinimizeToggle(true)}
+                      >
+                        <ChevronDown size={18} />
+                      </button>
+                    )}
                     </div>
 
                   </div>
@@ -1390,7 +1401,7 @@ export default function FullscreenVideoPlayer({
                     {canMinimize && !isVideoFullscreenView && (
                       <button
                         type="button"
-                        className="icon-button player-minimize-button select-none"
+                        className="icon-button player-minimize-button player-side-minimize-button select-none"
                         aria-label="Minimize video player"
                         title="Minimize Video"
                         onClick={() => onMinimizeToggle && onMinimizeToggle(true)}

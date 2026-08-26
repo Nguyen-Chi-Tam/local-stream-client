@@ -197,6 +197,8 @@ export default function PhotoPage({
   onChangeServer,
   onNavigate,
   isViewOpen,
+  isActivePage = true,
+  playbackSnapshot,
 }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -636,6 +638,23 @@ export default function PhotoPage({
     }
   }, [groupedItems, groupByFolder, sortKey]);
 
+  const allFolderKeys = useMemo(
+    () => groupKeys.filter((groupKey) => groupKey !== 'Queued'),
+    [groupKeys]
+  );
+  const areAllFoldersHidden =
+    allFolderKeys.length > 0 && allFolderKeys.every((groupKey) => hiddenFolderSet.has(groupKey));
+
+  const toggleAllFolders = useCallback(() => {
+    setHiddenFolders((prev) => {
+      const current = Array.isArray(prev) ? prev : [];
+      if (areAllFoldersHidden) {
+        return current.filter((folder) => !allFolderKeys.includes(folder));
+      }
+      return Array.from(new Set([...current, ...allFolderKeys]));
+    });
+  }, [allFolderKeys, areAllFoldersHidden]);
+
   const isAllFilteredSelected = useMemo(() => {
     if (filtered.length === 0) return false;
     return filtered.every((item) => selectedPhotoSet.has(getPhotoSelectionKey(item)));
@@ -795,6 +814,8 @@ export default function PhotoPage({
         onNavigate={onNavigate}
         onChangeServer={onChangeServer}
         reloadNonce={reloadNonce}
+        isActivePage={isActivePage}
+        playbackSnapshot={playbackSnapshot}
       />
 
       <main className="page photo-page media-page-layout">
@@ -988,9 +1009,25 @@ export default function PhotoPage({
                     if (groupByFolder) {
                       return (
                         <div className="visual-grid-grouped" aria-label="Photo gallery grouped by folder">
+                          <div className="folder-header">
+                            <div className="folder-header-left">
+                              <span className="folder-name">All</span>
+                            </div>
+                            <div className="folder-header-actions">
+                              <button
+                                type="button"
+                                className="secondary folder-hide-button"
+                                aria-label={areAllFoldersHidden ? 'Show all folders' : 'Hide all folders'}
+                                onClick={toggleAllFolders}
+                              >
+                                {areAllFoldersHidden ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                              </button>
+                            </div>
+                          </div>
                           {groupKeys.map((groupKey) => {
                             const groupItems = groupedItems[groupKey] || [];
-                            const isHidden = hiddenFolderSet.has(groupKey);
+                            const isQueued = groupKey === 'Queued';
+                            const isHidden = !isQueued && hiddenFolderSet.has(groupKey);
                             const remainingLimit = Math.max(0, itemsToRenderLimit - renderedCount);
                             const visibleItems = isHidden ? [] : groupItems.slice(0, remainingLimit);
                             renderedCount += visibleItems.length;
@@ -1020,31 +1057,29 @@ export default function PhotoPage({
                                     })()}
                                     <span className="folder-name">{groupKey} ({groupItems.length})</span>
                                   </div>
-                                  <div className="folder-header-actions">
-                                    <button
-                                      type="button"
-                                      className="secondary folder-hide-button"
-                                      aria-label={
-                                        isHidden
-                                          ? 'Show photos in this folder'
-                                          : 'Hide photos in this folder'
-                                      }
-                                      onClick={() => {
-                                        setHiddenFolders((prev) => {
-                                          const next = Array.isArray(prev) ? prev.slice() : [];
-                                          const idx = next.indexOf(groupKey);
-                                          if (idx >= 0) {
-                                            next.splice(idx, 1);
-                                          } else {
-                                            next.push(groupKey);
-                                          }
-                                          return next;
-                                        });
-                                      }}
-                                    >
-                                      {isHidden ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                                    </button>
-                                  </div>
+                                  {!isQueued && (
+                                    <div className="folder-header-actions">
+                                      <button
+                                        type="button"
+                                        className="secondary folder-hide-button"
+                                        aria-label={isHidden ? 'Show photos in this folder' : 'Hide photos in this folder'}
+                                        onClick={() => {
+                                          setHiddenFolders((prev) => {
+                                            const next = Array.isArray(prev) ? prev.slice() : [];
+                                            const idx = next.indexOf(groupKey);
+                                            if (idx >= 0) {
+                                              next.splice(idx, 1);
+                                            } else {
+                                              next.push(groupKey);
+                                            }
+                                            return next;
+                                          });
+                                        }}
+                                      >
+                                        {isHidden ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                                      </button>
+                                    </div>
+                                  )}
                                 </div>
                                 {!isHidden && visibleItems.length > 0 && (
                                   <div className="visual-grid">

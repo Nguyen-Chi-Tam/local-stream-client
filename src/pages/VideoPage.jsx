@@ -14,12 +14,12 @@ import { generateSpriteSheet, getCachedSprite } from '../functions/spriteSheetGe
 import {
   getItemId,
   pickTitle,
-  pickDateValue,
   pickDuration,
   pickThumbnailUrl,
   pickSourceUrl,
   filterItems,
   sortItems,
+  sortFolderKeys,
   getMediaType,
   pickFolderName,
   pickDurationSeconds,
@@ -413,6 +413,11 @@ export default function VideoPage({
   serverUrl,
   onChangeServer,
   onNavigate,
+  isActivePage = true,
+  activePlaybackType = null,
+  onStartPlayback,
+  onPlaybackChange,
+  playbackSnapshot,
 }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -534,6 +539,50 @@ export default function VideoPage({
       videoRef.current.style.setProperty('object-fit', 'contain', 'important');
     }
   }, [serverUrl, setIsPlaying, setCurrentTime, setCurrentDuration, setBufferedTime]);
+
+  const stopVideoPlayback = useCallback(() => {
+    setSelectedVideoId(null);
+    setShouldAutoPlaySelectedVideo(false);
+    setIsPlaying(false);
+    setCurrentTime(0);
+    setCurrentDuration(0);
+    setBufferedTime(0);
+    setIsLooping(false);
+    setIsFullscreen(false);
+    setIsWindowFullscreen(false);
+    setIsFloatingWindow(false);
+    setIsVideoMinimized(false);
+    clearSeekPreviewHideTimer();
+    clearSeekPreviewSeekTimer();
+    setIsSeekPreviewVisible(false);
+    bestKnownDurationRef.current = 0;
+    if (typeof document !== 'undefined' && document.fullscreenElement) {
+      exitDocumentFullscreen().catch(() => {});
+    }
+    if (videoRef.current) {
+      videoRef.current.pause();
+      videoRef.current.src = '';
+      videoRef.current.load();
+      videoRef.current.playbackRate = 1;
+      videoRef.current.style.transform = 'none';
+      videoRef.current.style.setProperty('object-fit', 'contain', 'important');
+    }
+  }, [setIsPlaying, setCurrentTime, setCurrentDuration, setBufferedTime]);
+
+  useEffect(() => {
+    if (activePlaybackType === 'music') {
+      stopVideoPlayback();
+    }
+  }, [activePlaybackType, stopVideoPlayback]);
+
+  useEffect(() => {
+    if (!isActivePage) {
+      setIsFullscreen(false);
+      setIsWindowFullscreen(false);
+      setIsFloatingWindow(false);
+      setIsVideoMinimized(false);
+    }
+  }, [isActivePage]);
 
   useEffect(() => {
     setRenderLimit(40);
@@ -801,9 +850,7 @@ export default function VideoPage({
       grouped[folder].push(item);
     });
 
-    const folderNames = Object.keys(grouped).sort((a, b) =>
-      a.localeCompare(b, undefined, { sensitivity: 'base' })
-    );
+    const folderNames = sortFolderKeys(Object.keys(grouped), sortedAllItems, sortKey, isSortReversed);
 
     const ordered = [];
     folderNames.forEach((folder) => {
@@ -814,7 +861,7 @@ export default function VideoPage({
       }
     });
     return ordered;
-  }, [sortedAllItems, groupByFolder, hiddenFolderSet]);
+  }, [sortedAllItems, groupByFolder, hiddenFolderSet, sortKey, isSortReversed]);
   const rawSortedItems = useMemo(
     () => sortItems(filtered, sortKey, isSortReversed),
     [filtered, sortKey, isSortReversed]
@@ -840,7 +887,7 @@ export default function VideoPage({
   const groupKeys = useMemo(() => {
     if (!groupByFolder || !groupedItems) return [];
     const keys = Object.keys(groupedItems).filter((k) => k !== 'Queued');
-    const sortedKeys = keys.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+    const sortedKeys = sortFolderKeys(keys, rawSortedItems, sortKey, isSortReversed);
 
     if (groupedItems['Queued']) {
       if (isSortReversed) {
@@ -853,13 +900,37 @@ export default function VideoPage({
     }
 
     return sortedKeys;
-  }, [groupedItems, groupByFolder, isSortReversed]);
+  }, [groupedItems, groupByFolder, rawSortedItems, sortKey, isSortReversed]);
+
+  const allFolderKeys = useMemo(
+    () => groupKeys.filter((groupKey) => groupKey !== 'Queued'),
+    [groupKeys]
+  );
+  const areAllFoldersHidden =
+    allFolderKeys.length > 0 && allFolderKeys.every((groupKey) => hiddenFolderSet.has(groupKey));
+
+  const toggleAllFolders = useCallback(() => {
+    setHiddenFolders((prev) => {
+      const current = Array.isArray(prev) ? prev : [];
+      if (areAllFoldersHidden) {
+        return current.filter((folder) => !allFolderKeys.includes(folder));
+      }
+      return Array.from(new Set([...current, ...allFolderKeys]));
+    });
+  }, [allFolderKeys, areAllFoldersHidden]);
 
   const selectedVideo = useMemo(() => {
     if (!items.length || selectedVideoId == null) return null;
     const found = items.find((item) => getItemId(item) === selectedVideoId);
     return found || null;
   }, [items, selectedVideoId]);
+
+  useEffect(() => {
+    if (activePlaybackType !== 'video') return;
+    onPlaybackChange?.(selectedVideo ? {
+      type: 'video', item: selectedVideo, currentTime, duration: currentDuration, isPlaying,
+    } : null);
+  }, [activePlaybackType, selectedVideo, currentTime, currentDuration, isPlaying, onPlaybackChange]);
 
   const selectedVideoSource = useMemo(
     () => (selectedVideo ? pickSourceUrl(serverUrl, selectedVideo) : ''),
@@ -1186,7 +1257,7 @@ export default function VideoPage({
       setCurrentDuration((prev) => Math.max(prev || 0, bestKnownDurationRef.current));
     }
 
-    if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
+    if (activePlaybackType === 'video' && typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
       const supportsPosition =
         typeof navigator.mediaSession.setPositionState === 'function';
       if (supportsPosition) {
@@ -1267,6 +1338,7 @@ export default function VideoPage({
   }
 
   function handleVideoPlay(event) {
+    onStartPlayback?.('video');
     const video = videoRef.current;
     playbackStallRef.current = {
       time: event?.currentTarget?.currentTime || event?.target?.currentTime || video?.currentTime || 0,
@@ -1942,6 +2014,8 @@ export default function VideoPage({
 
   // Wire keyboard controls for video playback.
   useEffect(() => {
+    if (!isActivePage) return;
+
     function handleKeyDown(event) {
       if (!playbackItems.length || !selectedVideo) return;
 
@@ -2031,11 +2105,14 @@ export default function VideoPage({
     return () => {
       document.removeEventListener('keydown', handleKeyDown, true);
     };
-  }, [playbackItems.length, selectedVideo, isPlaying, isFullscreen, isWindowFullscreen, isVideoFullscreenView, isLooping, canUseWindowFullscreen, supportsFloatingWindow, toggleFloatingWindow, showKeyboardActionHint, togglePlayPause, goToPreviousVideo, goToNextVideo, skipVideoRelative, toggleFullscreen, toggleWindowFullscreen, toggleLooping]);
+  }, [isActivePage, playbackItems.length, selectedVideo, isPlaying, isFullscreen, isWindowFullscreen, isVideoFullscreenView, isLooping, canUseWindowFullscreen, supportsFloatingWindow, toggleFloatingWindow, showKeyboardActionHint, togglePlayPause, goToPreviousVideo, goToNextVideo, skipVideoRelative, toggleFullscreen, toggleWindowFullscreen, toggleLooping]);
 
   // Wire media session API for hardware/media key controls.
   useEffect(() => {
     if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) {
+      return;
+    }
+    if (activePlaybackType !== 'video') {
       return;
     }
 
@@ -2106,7 +2183,7 @@ export default function VideoPage({
         }
       });
     };
-  }, [togglePlayPause, goToPreviousVideo, goToNextVideo, skipVideoRelative]);
+  }, [activePlaybackType, togglePlayPause, goToPreviousVideo, goToNextVideo, skipVideoRelative]);
 
   useEffect(() => {
     return () => {
@@ -2184,6 +2261,9 @@ export default function VideoPage({
     if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) {
       return;
     }
+    if (activePlaybackType !== 'video') {
+      return;
+    }
 
     if (!selectedVideo) {
       try {
@@ -2218,11 +2298,14 @@ export default function VideoPage({
         // Some browsers may not support MediaMetadata fully; fail silently.
       }
     }
-  }, [selectedVideo, mediaSessionArtwork]);
+  }, [activePlaybackType, selectedVideo, mediaSessionArtwork]);
 
   // Reflect play/pause state in the Media Session API.
   useEffect(() => {
     if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) {
+      return;
+    }
+    if (activePlaybackType !== 'video') {
       return;
     }
     try {
@@ -2230,9 +2313,10 @@ export default function VideoPage({
     } catch {
       // ignore
     }
-  }, [isPlaying]);
+  }, [activePlaybackType, isPlaying]);
 
   function handlePlayVideo(item) {
+    onStartPlayback?.('video');
     if (isItemQueued(item)) {
       removeFromQueue(item, true);
     }
@@ -2341,6 +2425,8 @@ export default function VideoPage({
         onNavigate={onNavigate}
         onChangeServer={onChangeServer}
         reloadNonce={reloadNonce}
+        isActivePage={isActivePage}
+        playbackSnapshot={playbackSnapshot}
       />
 
       <main className={
@@ -2591,9 +2677,21 @@ export default function VideoPage({
                   if (groupByFolder) {
                     return (
                       <>
+                        <li className="folder-header">
+                          <span className="folder-name">All</span>
+                          <button
+                            type="button"
+                            className="secondary folder-hide-button"
+                            aria-label={areAllFoldersHidden ? 'Show all folders' : 'Hide all folders'}
+                            onClick={toggleAllFolders}
+                          >
+                            {areAllFoldersHidden ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                          </button>
+                        </li>
                         {groupKeys.map((groupKey) => {
                           const groupItems = (groupedItems && groupedItems[groupKey]) || [];
-                          const isHidden = hiddenFolderSet.has(groupKey);
+                          const isQueued = groupKey === 'Queued';
+                          const isHidden = !isQueued && hiddenFolderSet.has(groupKey);
                           const remainingLimit = Math.max(0, itemsToRenderLimit - renderedCount);
                           const visibleItems = isHidden ? [] : groupItems.slice(0, remainingLimit);
                           renderedCount += visibleItems.length;
@@ -2602,29 +2700,27 @@ export default function VideoPage({
                             <React.Fragment key={groupKey}>
                               <li className="folder-header">
                                 <span className="folder-name">{groupKey} ({groupItems.length})</span>
-                                <button
-                                  type="button"
-                                  className="secondary folder-hide-button"
-                                  aria-label={
-                                    isHidden
-                                      ? 'Show videos in this folder'
-                                      : 'Hide videos in this folder'
-                                  }
-                                  onClick={() => {
-                                    setHiddenFolders((prev) => {
-                                      const next = Array.isArray(prev) ? prev.slice() : [];
-                                      const idx = next.indexOf(groupKey);
-                                      if (idx >= 0) {
-                                        next.splice(idx, 1);
-                                      } else {
-                                        next.push(groupKey);
-                                      }
-                                      return next;
-                                    });
-                                  }}
-                                >
-                                  {isHidden ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                                </button>
+                                {!isQueued && (
+                                  <button
+                                    type="button"
+                                    className="secondary folder-hide-button"
+                                    aria-label={isHidden ? 'Show videos in this folder' : 'Hide videos in this folder'}
+                                    onClick={() => {
+                                      setHiddenFolders((prev) => {
+                                        const next = Array.isArray(prev) ? prev.slice() : [];
+                                        const idx = next.indexOf(groupKey);
+                                        if (idx >= 0) {
+                                          next.splice(idx, 1);
+                                        } else {
+                                          next.push(groupKey);
+                                        }
+                                        return next;
+                                      });
+                                    }}
+                                  >
+                                    {isHidden ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                                  </button>
+                                )}
                               </li>
                               {!isHidden && visibleItems.map(renderTrackItem)}
                             </React.Fragment>

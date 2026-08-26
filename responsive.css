@@ -1778,24 +1778,32 @@
     }
 
     .video-player-container:not(.video-player-minimized):not(.video-player-fullscreen):not(.video-player-window-fullscreen) .player-controls {
-        gap: 0.93rem !important;
+        gap: 0.8835rem !important;
     }
 
     .video-player-container:not(.video-player-minimized):not(.video-player-fullscreen):not(.video-player-window-fullscreen) .player-left-actions,
     .video-player-container:not(.video-player-minimized):not(.video-player-fullscreen):not(.video-player-window-fullscreen) .player-side-actions {
-        gap: 0.78rem !important;
+        gap: 0.741rem !important;
     }
 
     .video-player-container.video-player-fullscreen:not(.video-player-minimized) .player-controls,
     .video-player-container.video-player-window-fullscreen:not(.video-player-minimized) .player-controls {
-        gap: 1.09rem !important;
+        gap: 1.0355rem !important;
     }
 
     .video-player-container.video-player-fullscreen:not(.video-player-minimized) .player-left-actions,
     .video-player-container.video-player-fullscreen:not(.video-player-minimized) .player-side-actions,
     .video-player-container.video-player-window-fullscreen:not(.video-player-minimized) .player-left-actions,
     .video-player-container.video-player-window-fullscreen:not(.video-player-minimized) .player-side-actions {
-        gap: 0.91rem !important;
+        gap: 0.8645rem !important;
+    }
+
+    .video-player-container:not(.video-player-fullscreen):not(.video-player-window-fullscreen) .player-title .marquee-inner {
+        display: block !important;
+        overflow: hidden !important;
+        padding-left: 0 !important;
+        text-overflow: ellipsis !important;
+        white-space: nowrap !important;
     }
 
     .video-player-container:not(.video-player-minimized) .player-controls .icon-button,
@@ -1866,6 +1874,38 @@
 
     .photo-page .visual-grid {
         grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)) !important;
+    }
+}
+
+/* Keep the narrow-phone minimize and fullscreen controls tightly grouped. */
+@media (max-width: 380px) {
+    .video-player-footer:not(.video-footer-floating) .player-side-actions {
+        right: -0.3rem !important;
+        gap: 0 !important;
+    }
+
+    .video-player-footer:not(.video-footer-floating) .player-info {
+        position: relative;
+        width: 100%;
+        padding-right: 2.5rem;
+    }
+
+    .video-player-footer:not(.video-footer-floating) .player-title-minimize-button {
+        display: inline-flex !important;
+        position: absolute;
+        right: 0;
+        top: 50%;
+        transform: translateY(-50%);
+        padding-inline: 0.2rem !important;
+    }
+
+    .video-player-footer:not(.video-footer-floating) .player-side-minimize-button {
+        display: none !important;
+    }
+
+    .video-player-footer:not(.video-footer-floating) .player-side-actions .icon-button,
+    .video-footer-floating .player-side-actions .icon-button {
+        padding-inline: 0.2rem !important;
     }
 }
 

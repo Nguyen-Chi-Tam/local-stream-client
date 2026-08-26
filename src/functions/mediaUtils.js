@@ -357,6 +357,8 @@ export function pickDateValue(item) {
     return 0;
   }
   if (typeof raw === 'number') return raw;
+  const numericRaw = Number(raw);
+  if (Number.isFinite(numericRaw)) return numericRaw;
   const fromDate = Date.parse(String(raw));
   if (Number.isNaN(fromDate)) return 0;
   return fromDate;
@@ -538,6 +540,45 @@ export function sortItems(items, sortKey, isSortReversed) {
 
   if (isSortReversed) arr.reverse();
   return arr;
+}
+
+export function sortFolderKeys(keys, items, sortKey, isSortReversed, getFolderName = pickFolderName) {
+  const folderKeys = (keys || []).slice();
+
+  if (sortKey !== 'date' && sortKey !== 'duration') {
+    return folderKeys.sort((a, b) => {
+      const comparison = a.localeCompare(b, undefined, { sensitivity: 'base' });
+      return isSortReversed ? -comparison : comparison;
+    });
+  }
+
+  const keySet = new Set(folderKeys);
+  const boundaryDateByFolder = new Map();
+
+  (items || []).forEach((item) => {
+    const folder = getFolderName(item) || 'Other';
+    if (!keySet.has(folder)) return;
+
+    const value = sortKey === 'duration' ? pickDurationSeconds(item) : pickDateValue(item);
+    const current = boundaryDateByFolder.get(folder);
+    if (
+      current == null ||
+      (sortKey === 'duration'
+        ? value > current
+        : isSortReversed
+          ? value > current
+          : value < current)
+    ) {
+      boundaryDateByFolder.set(folder, value);
+    }
+  });
+
+  return folderKeys.sort((a, b) => {
+    const ad = boundaryDateByFolder.get(a) ?? 0;
+    const bd = boundaryDateByFolder.get(b) ?? 0;
+    if (ad !== bd) return isSortReversed ? bd - ad : ad - bd;
+    return a.localeCompare(b, undefined, { sensitivity: 'base' });
+  });
 }
 
 export function getMediaType(item) {

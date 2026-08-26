@@ -23,6 +23,7 @@ import {
   pickSourceUrl,
   filterItems,
   sortItems,
+  sortFolderKeys,
   isMojibake,
   decodeMojibakeString,
   extractTitleFromPath,
@@ -186,7 +187,7 @@ function pickStreamUrl(serverUrl, item) {
 
 
 
-function reorderByFolder(items) {
+function reorderByFolder(items, sortKey, isSortReversed) {
   if (!items || !items.length) return [];
 
   const groups = {};
@@ -196,9 +197,7 @@ function reorderByFolder(items) {
     groups[folder].push(item);
   });
 
-  const folderNames = Object.keys(groups).sort((a, b) =>
-    a.localeCompare(b, undefined, { sensitivity: 'base' })
-  );
+  const folderNames = sortFolderKeys(Object.keys(groups), items, sortKey, isSortReversed);
 
   const ordered = [];
   folderNames.forEach((folder) => {
@@ -210,7 +209,16 @@ function reorderByFolder(items) {
 
 const isElectron = typeof navigator !== 'undefined' && /electron/i.test(navigator.userAgent);
 
-export default function MediaPage({ serverUrl, onChangeServer, onNavigate }) {
+export default function MediaPage({
+  serverUrl,
+  onChangeServer,
+  onNavigate,
+  isActivePage = true,
+  activePlaybackType = null,
+  onStartPlayback,
+  onPlaybackChange,
+  playbackSnapshot,
+}) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [allItems, setAllItems] = useState([]);
@@ -246,6 +254,7 @@ export default function MediaPage({ serverUrl, onChangeServer, onNavigate }) {
   const scrollTrackRef = useRef(null);
   const searchHistoryAddedRef = useRef(false);
   const fullscreenHistoryAddedRef = useRef(false);
+  const miniPlayerAutoOpenedRef = useRef(false);
   const { queue, removeFromQueue, isItemQueued } = useQueue();
   const [isDraggingThumb, setIsDraggingThumb] = useState(false);
   const dragStartY = useRef(0);
@@ -277,6 +286,12 @@ export default function MediaPage({ serverUrl, onChangeServer, onNavigate }) {
     });
   }, []);
 
+  useEffect(() => {
+    if (!isActivePage) {
+      setPlayerFullscreen(false);
+    }
+  }, [isActivePage, setPlayerFullscreen]);
+
   const handleReload = useCallback(() => {
     if (!serverUrl) return;
     clearMediaCache(serverUrl);
@@ -295,6 +310,27 @@ export default function MediaPage({ serverUrl, onChangeServer, onNavigate }) {
     setScrollOffset(0);
     lastScrollTopRef.current = 0;
   }, [serverUrl, setIsPlaying, setCurrentTime, setCurrentDuration, setBufferedTime]);
+
+  const stopAudioPlayback = useCallback(() => {
+    setCurrentIndex(-1);
+    setIsPlaying(false);
+    setCurrentTime(0);
+    setCurrentDuration(0);
+    setBufferedTime(0);
+    setPlayerFullscreen(false);
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.src = '';
+      audioRef.current.load();
+      audioRef.current.playbackRate = 1;
+    }
+  }, [setIsPlaying, setCurrentTime, setCurrentDuration, setBufferedTime, setPlayerFullscreen]);
+
+  useEffect(() => {
+    if (activePlaybackType === 'video') {
+      stopAudioPlayback();
+    }
+  }, [activePlaybackType, stopAudioPlayback]);
 
   useEffect(() => {
     return () => {
@@ -642,13 +678,13 @@ export default function MediaPage({ serverUrl, onChangeServer, onNavigate }) {
   const playlistItems = useMemo(
     () => {
       if (!groupByFolder) return sortedAllItems;
-      const reordered = reorderByFolder(sortedAllItems);
+      const reordered = reorderByFolder(sortedAllItems, sortKey, isSortReversed);
       if (hiddenFolderSet.size === 0) return reordered;
       return reordered.filter(
         (item) => !hiddenFolderSet.has(pickFolderName(item) || 'Other')
       );
     },
-    [sortedAllItems, groupByFolder, hiddenFolderSet]
+    [sortedAllItems, groupByFolder, hiddenFolderSet, sortKey, isSortReversed]
   );
 
 
@@ -664,6 +700,7 @@ export default function MediaPage({ serverUrl, onChangeServer, onNavigate }) {
   // Direct play function for any item (from playlist, queue, or hidden folder).
   function handlePlayItem(item, playReason) {
     if (!audioRef.current || !item) return;
+    onStartPlayback?.('music');
     if (isItemQueued(item)) {
       removeFromQueue(item, true);
     }
@@ -688,7 +725,9 @@ export default function MediaPage({ serverUrl, onChangeServer, onNavigate }) {
     setCurrentTime(0);
     setBufferedTime(0);
 
-    if ((window.innerWidth <= 380 || window.innerHeight < 700) && (playReason === 'start' || playReason === 'first')) {
+    const isMiniPhone = window.innerWidth <= 380 || window.innerHeight < 700;
+    if (isActivePage && isMiniPhone && !currentlyPlaying && !miniPlayerAutoOpenedRef.current) {
+      miniPlayerAutoOpenedRef.current = true;
       setPlayerFullscreen(true);
     }
   }
@@ -795,8 +834,8 @@ export default function MediaPage({ serverUrl, onChangeServer, onNavigate }) {
   // folder filtering) so that headers for hidden folders still appear, letting
   // users toggle them back on.
   const rawDisplayItems = useMemo(
-    () => filterItems(groupByFolder ? reorderByFolder(sortedAllItems) : sortedAllItems, searchQuery),
-    [sortedAllItems, groupByFolder, searchQuery]
+    () => filterItems(sortedAllItems, searchQuery),
+    [sortedAllItems, searchQuery]
   );
 
   const displayItems = useMemo(
@@ -823,21 +862,7 @@ export default function MediaPage({ serverUrl, onChangeServer, onNavigate }) {
   const groupKeys = useMemo(() => {
     if (!groupByFolder) return [];
     const keys = Object.keys(groups).filter((k) => k !== 'Queued');
-    let sortedKeys = [];
-
-    if (sortKey === 'date') {
-      // Sort folders by the latest date value of items inside (descending)
-      sortedKeys = keys.sort((a, b) => {
-        const aItems = groups[a] || [];
-        const bItems = groups[b] || [];
-        const aMax = Math.max(...aItems.map((item) => (typeof pickDateValue === 'function' ? pickDateValue(item) : 0)), 0);
-        const bMax = Math.max(...bItems.map((item) => (typeof pickDateValue === 'function' ? pickDateValue(item) : 0)), 0);
-        return bMax - aMax;
-      });
-    } else {
-      // Default: alphabetical
-      sortedKeys = keys.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
-    }
+    const sortedKeys = sortFolderKeys(keys, rawDisplayItems, sortKey, isSortReversed);
 
     if (groups['Queued']) {
       if (isSortReversed) {
@@ -850,7 +875,24 @@ export default function MediaPage({ serverUrl, onChangeServer, onNavigate }) {
     }
 
     return sortedKeys;
-  }, [groups, groupByFolder, sortKey, isSortReversed]);
+  }, [groups, groupByFolder, rawDisplayItems, sortKey, isSortReversed]);
+
+  const allFolderKeys = useMemo(
+    () => groupKeys.filter((groupKey) => groupKey !== 'Queued'),
+    [groupKeys]
+  );
+  const areAllFoldersHidden =
+    allFolderKeys.length > 0 && allFolderKeys.every((groupKey) => hiddenFolderSet.has(groupKey));
+
+  const toggleAllFolders = useCallback(() => {
+    setHiddenFolders((prev) => {
+      const current = Array.isArray(prev) ? prev : [];
+      if (areAllFoldersHidden) {
+        return current.filter((folder) => !allFolderKeys.includes(folder));
+      }
+      return Array.from(new Set([...current, ...allFolderKeys]));
+    });
+  }, [allFolderKeys, areAllFoldersHidden]);
 
   const flatGroupedItems = useMemo(() => {
     if (!groupByFolder) {
@@ -862,9 +904,16 @@ export default function MediaPage({ serverUrl, onChangeServer, onNavigate }) {
     }
 
     const flat = [];
+    flat.push({
+      type: 'header',
+      key: 'header-All',
+      groupKey: 'All',
+      isHidden: areAllFoldersHidden,
+      isAllFoldersHeader: true,
+    });
     groupKeys.forEach((groupKey) => {
       const groupItems = groups[groupKey] || [];
-      const isHidden = hiddenFolderSet.has(groupKey);
+      const isHidden = groupKey !== 'Queued' && hiddenFolderSet.has(groupKey);
       flat.push({
         type: 'header',
         key: `header-${groupKey}`,
@@ -883,7 +932,7 @@ export default function MediaPage({ serverUrl, onChangeServer, onNavigate }) {
       }
     });
     return flat;
-  }, [groupByFolder, displayItems, groupKeys, groups, hiddenFolderSet]);
+  }, [groupByFolder, displayItems, groupKeys, groups, hiddenFolderSet, allFolderKeys, areAllFoldersHidden]);
 
   const flatGroupedItemsRef = useRef(flatGroupedItems);
   flatGroupedItemsRef.current = flatGroupedItems;
@@ -907,6 +956,12 @@ export default function MediaPage({ serverUrl, onChangeServer, onNavigate }) {
   const currentArtUrl = currentlyPlaying
     ? pickThumbnailUrl(serverUrl, currentlyPlaying)
     : defaultArt;
+
+  useEffect(() => {
+    onPlaybackChange?.(currentlyPlaying ? {
+      type: 'music', item: currentlyPlaying, currentTime, duration: currentDuration, isPlaying,
+    } : null);
+  }, [currentlyPlaying, currentTime, currentDuration, isPlaying, onPlaybackChange]);
 
   const mediaSessionArtwork = useMemo(() => {
     const raw = String(currentArtUrl || '').trim();
@@ -951,6 +1006,9 @@ export default function MediaPage({ serverUrl, onChangeServer, onNavigate }) {
     if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) {
       return;
     }
+    if (activePlaybackType !== 'music') {
+      return;
+    }
 
     if (!currentlyPlaying) {
       try {
@@ -986,7 +1044,7 @@ export default function MediaPage({ serverUrl, onChangeServer, onNavigate }) {
         // Some browsers may not support MediaMetadata fully; fail silently.
       }
     }
-  }, [currentlyPlaying, mediaSessionArtwork]);
+  }, [activePlaybackType, currentlyPlaying, mediaSessionArtwork]);
 
   function scrollToCurrent() {
     if (!currentlyPlaying) return;
@@ -1074,7 +1132,7 @@ export default function MediaPage({ serverUrl, onChangeServer, onNavigate }) {
     setCurrentTime(t);
     updateBufferedTime();
 
-    if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
+    if (activePlaybackType === 'music' && typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
       const currentSecond = Math.floor(t);
       if (currentSecond !== lastPositionSecondRef.current) {
         lastPositionSecondRef.current = currentSecond;
@@ -1112,6 +1170,7 @@ export default function MediaPage({ serverUrl, onChangeServer, onNavigate }) {
   }
 
   function handleAudioPlay() {
+    onStartPlayback?.('music');
     setIsPlaying(true);
   }
 
@@ -1130,12 +1189,15 @@ export default function MediaPage({ serverUrl, onChangeServer, onNavigate }) {
     if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) {
       return;
     }
+    if (activePlaybackType !== 'music') {
+      return;
+    }
     try {
       navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
     } catch {
       // ignore
     }
-  }, [isPlaying]);
+  }, [activePlaybackType, isPlaying]);
 
   const mediaHandlersRef = useRef({});
   mediaHandlersRef.current = {
@@ -1150,6 +1212,9 @@ export default function MediaPage({ serverUrl, onChangeServer, onNavigate }) {
   // Wire hardware/media key controls (play/pause, next, previous, seek).
   useEffect(() => {
     if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) {
+      return;
+    }
+    if (activePlaybackType !== 'music') {
       return;
     }
 
@@ -1230,7 +1295,7 @@ export default function MediaPage({ serverUrl, onChangeServer, onNavigate }) {
         }
       });
     };
-  }, []);
+  }, [activePlaybackType]);
 
   function scrollListToTop() {
     const list = musicListRef.current;
@@ -1255,6 +1320,8 @@ export default function MediaPage({ serverUrl, onChangeServer, onNavigate }) {
 
 
   useEffect(() => {
+    if (!isActivePage) return;
+
     function handleKeyDown(event) {
       if (!currentlyPlaying && !playlistItems.length) return;
 
@@ -1335,7 +1402,7 @@ export default function MediaPage({ serverUrl, onChangeServer, onNavigate }) {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [playlistItems.length, togglePlayPause, getPrevIndex, getNextIndex, skipRelative, currentlyPlaying, isPlayerFullscreen, setPlayerFullscreen]);
+  }, [isActivePage, playlistItems.length, togglePlayPause, getPrevIndex, getNextIndex, skipRelative, currentlyPlaying, isPlayerFullscreen, setPlayerFullscreen]);
 
   return (
     <div className="media-page-container" ref={containerRef}>
@@ -1346,6 +1413,8 @@ export default function MediaPage({ serverUrl, onChangeServer, onNavigate }) {
         onNavigate={onNavigate}
         onChangeServer={onChangeServer}
         reloadNonce={reloadNonce}
+        isActivePage={isActivePage}
+        playbackSnapshot={playbackSnapshot}
       />
 
       <main className={
@@ -1537,37 +1606,37 @@ export default function MediaPage({ serverUrl, onChangeServer, onNavigate }) {
                         )}
                         {visibleItemsSlice.map((itemObj) => {
                           if (itemObj.type === 'header') {
-                            const { groupKey, isHidden } = itemObj;
+                            const { groupKey, isHidden, isAllFoldersHeader } = itemObj;
                             return (
                               <li className="folder-header" key={itemObj.key}>
-                                <span className="folder-name">{groupKey} ({itemObj.itemCount ?? 0})</span>
-                                <button
-                                  type="button"
-                                  className="secondary folder-hide-button"
-                                  aria-label={
-                                    isHidden
-                                      ? 'Show songs in this folder'
-                                      : 'Hide songs in this folder'
-                                  }
-                                  onClick={() => {
-                                    setHiddenFolders((prev) => {
-                                      const next = Array.isArray(prev) ? prev.slice() : [];
-                                      const idx = next.indexOf(groupKey);
-                                      if (idx >= 0) {
-                                        next.splice(idx, 1);
-                                      } else {
-                                        next.push(groupKey);
-                                      }
-                                      return next;
-                                    });
-                                  }}
-                                >
-                                  {isHidden ? (
-                                    <ChevronUp size={14} />
-                                  ) : (
-                                    <ChevronDown size={14} />
-                                  )}
-                                </button>
+                                <span className="folder-name">
+                                  {isAllFoldersHeader ? groupKey : `${groupKey} (${itemObj.itemCount ?? 0})`}
+                                </span>
+                                {groupKey !== 'Queued' && (
+                                  <button
+                                    type="button"
+                                    className="secondary folder-hide-button"
+                                    aria-label={
+                                      isAllFoldersHeader
+                                        ? (isHidden ? 'Show all folders' : 'Hide all folders')
+                                        : (isHidden ? 'Show songs in this folder' : 'Hide songs in this folder')
+                                    }
+                                    onClick={isAllFoldersHeader ? toggleAllFolders : () => {
+                                      setHiddenFolders((prev) => {
+                                        const next = Array.isArray(prev) ? prev.slice() : [];
+                                        const idx = next.indexOf(groupKey);
+                                        if (idx >= 0) {
+                                          next.splice(idx, 1);
+                                        } else {
+                                          next.push(groupKey);
+                                        }
+                                        return next;
+                                      });
+                                    }}
+                                  >
+                                    {isHidden ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                                  </button>
+                                )}
                               </li>
                             );
                           } else {

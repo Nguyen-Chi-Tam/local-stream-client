@@ -147,46 +147,21 @@ export default function ConnectPage({ onConnected }) {
     const cEnd = typeof input.selectionEnd === 'number' ? input.selectionEnd : cStart;
 
     const currentIndex = states.findIndex(
-      (s) => s.start === cStart && s.end === cEnd
+      (s) => cStart < s.end && cEnd > s.start
     );
 
-    let targetIndex = -1;
+    const activeIndex = currentIndex !== -1
+      ? currentIndex
+      : direction === 'prev'
+        ? states.findLastIndex((s) => s.end <= cStart)
+        : states.findIndex((s) => s.start >= cEnd);
 
-    if (currentIndex !== -1) {
-      if (direction === 'prev') {
-        targetIndex = (currentIndex - 1 + states.length) % states.length;
-      } else {
-        targetIndex = (currentIndex + 1) % states.length;
-      }
-    } else {
-      const insideIndex = states.findIndex(
-        (s) => cStart >= s.start && cEnd <= s.end
-      );
-
-      if (insideIndex !== -1) {
-        targetIndex = insideIndex;
-      } else if (direction === 'prev') {
-        for (let i = states.length - 1; i >= 0; i -= 1) {
-          if (states[i].end <= cStart) {
-            targetIndex = i;
-            break;
-          }
-        }
-        if (targetIndex === -1) {
-          targetIndex = states.length - 1;
-        }
-      } else {
-        for (let i = 0; i < states.length; i += 1) {
-          if (states[i].start >= cEnd) {
-            targetIndex = i;
-            break;
-          }
-        }
-        if (targetIndex === -1) {
-          targetIndex = 0;
-        }
-      }
-    }
+    const resolvedIndex = activeIndex === -1
+      ? direction === 'prev' ? states.length - 1 : 0
+      : activeIndex;
+    const targetIndex = direction === 'prev'
+      ? (resolvedIndex - 1 + states.length) % states.length
+      : (resolvedIndex + 1) % states.length;
 
     const targetState = states[targetIndex];
     input.focus();
@@ -419,7 +394,7 @@ export default function ConnectPage({ onConnected }) {
                 Download LocalStream for Android
               </a>
               <a
-                href="https://github.com/Nguyen-Chi-Tam/local-stream-client/releases/download/download/Local.Stream.Client.Setup.2.0.8.exe"
+                href="https://github.com/Nguyen-Chi-Tam/local-stream-client/releases/download/download/Local.Stream.Client.Setup.2.0.9.exe"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="connect-desktop-link"

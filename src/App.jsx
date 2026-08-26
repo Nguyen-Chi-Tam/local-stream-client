@@ -29,6 +29,8 @@ function withBasePath(pathname) {
 
 export default function App() {
   const [serverUrl, setServerUrl] = useState('');
+  const [activePlaybackType, setActivePlaybackType] = useState(null);
+  const [playbackSnapshot, setPlaybackSnapshot] = useState(null);
   const [path, setPath] = useState(() => {
     try {
       const redirect = window.sessionStorage.getItem('spa_redirect');
@@ -104,6 +106,7 @@ export default function App() {
 
   function handleConnected(url) {
     clearMediaCache();
+    setActivePlaybackType(null);
     setServerUrl(url);
     navigate('/media');
   }
@@ -119,6 +122,7 @@ export default function App() {
       }
     } catch {}
     clearMediaCache();
+    setActivePlaybackType(null);
     setServerUrl('');
     navigate('/');
   }
@@ -135,40 +139,47 @@ export default function App() {
     }
   }, [isConnected, section]);
 
-  let pageContent = null;
   if (!section || !isConnected) {
-    pageContent = <ConnectPage onConnected={handleConnected} />;
-  } else if (section === 'music') {
-    pageContent = (
-      <MediaPage
-        serverUrl={serverUrl}
-        onChangeServer={handleChangeServer}
-        onNavigate={navigate}
-      />
-    );
-  } else if (section === 'video') {
-    pageContent = (
-      <VideoPage
-        serverUrl={serverUrl}
-        onChangeServer={handleChangeServer}
-        onNavigate={navigate}
-      />
-    );
-  } else if (section === 'photo' || section === 'photo-view') {
-    pageContent = (
-      <PhotoPage
-        serverUrl={serverUrl}
-        onChangeServer={handleChangeServer}
-        onNavigate={navigate}
-        isViewOpen={section === 'photo-view'}
-      />
-    );
+    return <ConnectPage onConnected={handleConnected} />;
   }
 
   return (
     <>
-      {pageContent}
-      {isConnected && <QueueToast />}
+      <div style={{ display: section === 'music' ? 'contents' : 'none' }} aria-hidden={section === 'music' ? undefined : 'true'}>
+        <MediaPage
+          serverUrl={serverUrl}
+          onChangeServer={handleChangeServer}
+          onNavigate={navigate}
+          isActivePage={section === 'music'}
+          activePlaybackType={activePlaybackType}
+          onStartPlayback={setActivePlaybackType}
+          onPlaybackChange={setPlaybackSnapshot}
+          playbackSnapshot={playbackSnapshot}
+        />
+      </div>
+      <div style={{ display: section === 'video' ? 'contents' : 'none' }} aria-hidden={section === 'video' ? undefined : 'true'}>
+        <VideoPage
+          serverUrl={serverUrl}
+          onChangeServer={handleChangeServer}
+          onNavigate={navigate}
+          isActivePage={section === 'video'}
+          activePlaybackType={activePlaybackType}
+          onStartPlayback={setActivePlaybackType}
+          onPlaybackChange={setPlaybackSnapshot}
+          playbackSnapshot={playbackSnapshot}
+        />
+      </div>
+      {(section === 'photo' || section === 'photo-view') && (
+        <PhotoPage
+          serverUrl={serverUrl}
+          onChangeServer={handleChangeServer}
+          onNavigate={navigate}
+          isViewOpen={section === 'photo-view'}
+          isActivePage={section === 'photo' || section === 'photo-view'}
+          playbackSnapshot={playbackSnapshot}
+        />
+      )}
+      <QueueToast />
     </>
   );
 }

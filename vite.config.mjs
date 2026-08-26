@@ -21,6 +21,9 @@ export default defineConfig({
   },
   server: {
     port: 1111,
-    host:'0.0.0.0',
+    host: '0.0.0.0',
+    headers: {
+      'Cache-Control': 'no-store',
+    },
   }
 });
