@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Menu, X, Music, Video, Image, Server } from 'lucide-react';
+import { Menu, X, Music, Video, Image, Pause, Home } from 'lucide-react';
 
 import appIcon from '../../public/lsclient.png';
+import defaultArt from '/default-art.png';
 import { fetchMediaItemsCached, getCachedMediaItems } from '../functions/mediaApiCache.js';
-import { getMediaType } from '../functions/mediaUtils.js';
+import { getMediaType, pickThumbnailUrl, pickTitle, pickArtist } from '../functions/mediaUtils.js';
 import { applyGlass, removeGlass, DEFAULT_SWITCHER_CONFIG } from '../lib/liquidGlass.js';
 import DynamicIslandWaveform from './DynamicIslandWaveform.jsx';
 
@@ -17,7 +18,6 @@ const MOBILE_MENU_ITEMS = [
   { id: 'music', label: 'Music', path: '/media', icon: Music, type: 'nav' },
   { id: 'video', label: 'Video', path: '/media/video', icon: Video, type: 'nav' },
   { id: 'photo', label: 'Photo', path: '/media/photo', icon: Image, type: 'nav' },
-  { id: 'server', label: 'Change Server', icon: Server, type: 'action' },
 ];
 
 export default function Header({
@@ -46,7 +46,6 @@ export default function Header({
   const navGlowRef = useRef(null);
   const indicatorRef = useRef(null);
   const itemsRef = useRef([]);
-  const changeServerBtnRef = useRef(null);
 
   const activeIdx = Math.max(
     0,
@@ -121,8 +120,13 @@ export default function Header({
   const showPlaybackInMenu =
     activeSection !== playbackSnapshot?.type &&
     (playbackSnapshot?.type === 'music' || playbackSnapshot?.type === 'video') &&
-    playbackSnapshot.item &&
-    playbackSnapshot.isPlaying;
+    playbackSnapshot.item;
+  const playbackArtUrl = showPlaybackInMenu
+    ? pickThumbnailUrl(serverUrl, playbackSnapshot.item)
+    : '';
+  const playbackArtist = playbackSnapshot?.type === 'music'
+    ? pickArtist(playbackSnapshot.item)
+    : '';
 
   // ── Desktop Liquid Glass Switcher Mechanics ───────────────────────────
   const navRect = useCallback(() => {
@@ -248,17 +252,12 @@ export default function Header({
       snapToIndex(activeIdx, false);
       applyGlass(indicator, DEFAULT_SWITCHER_CONFIG);
     }
-    const serverBtn = changeServerBtnRef.current;
-    if (serverBtn) {
-      applyGlass(serverBtn, DEFAULT_SWITCHER_CONFIG);
-    }
     const mobileBtn = mobileMenuBtnRef.current;
     if (mobileBtn) {
       applyGlass(mobileBtn, DEFAULT_SWITCHER_CONFIG);
     }
     return () => {
       if (indicator) removeGlass(indicator);
-      if (serverBtn) removeGlass(serverBtn);
       if (mobileBtn) removeGlass(mobileBtn);
     };
   }, [activeIdx, isActivePage, snapToIndex]);
@@ -708,12 +707,21 @@ export default function Header({
   return (
     <header className="top-bar">
       <div className="top-bar-left">
-        <img src={appIcon} alt="App Icon" className="app-icon" />
+        <button
+          type="button"
+          className="app-icon-button"
+          onClick={handleChangeServer}
+          aria-label="Change server"
+          title="Change server"
+        >
+          <img src={appIcon} alt="" className="app-icon" />
+          <Home className="app-icon-home" size={22} aria-hidden="true" />
+        </button>
         <div className="top-bar-title">
           <h1>{displayTitle}</h1>
           {serverUrl && (
             <a className="server-label" href={serverUrl} target="_blank" rel="noreferrer">
-              {`${serverUrl}`}
+              <span className="connected-prefix">Connected to </span>{serverUrl}
             </a>
           )}
         </div>
@@ -743,8 +751,7 @@ export default function Header({
                 (item.id === 'music' || item.id === 'video') &&
                 activeSection !== item.id &&
                 playbackSnapshot?.type === item.id &&
-                playbackSnapshot.item &&
-                playbackSnapshot.isPlaying;
+                playbackSnapshot.item;
               return (
                 <button
                   key={item.id}
@@ -760,9 +767,35 @@ export default function Header({
                   {isPlaybackNav ? (
                     <>
                       <Icon className="ios-icon" size={17} />
-                      <DynamicIslandWaveform isPlaying={playbackSnapshot.isPlaying} size="sm" />
                       <span className="ios-playback-time">
                         {formatPlaybackTime(playbackTime)}
+                      </span>
+                      <img
+                        className="desktop-playback-art"
+                        src={playbackArtUrl || defaultArt}
+                        alt=""
+                        aria-hidden="true"
+                        onError={(event) => {
+                          event.currentTarget.src = defaultArt;
+                        }}
+                      />
+                      <span className="playback-island-tooltip" role="tooltip">
+                        <span className="playback-island-tooltip-header">
+                          <span className="playback-island-tooltip-type">
+                            {playbackSnapshot.type === 'music' ? 'Music' : 'Video'}
+                            {playbackArtist ? ` · ${playbackArtist}` : ''}
+                          </span>
+                          {playbackSnapshot.type === 'music' && (
+                            <DynamicIslandWaveform
+                              size="sm"
+                              isPlaying={playbackSnapshot.isPlaying}
+                              className="playback-tooltip-waveform"
+                            />
+                          )}
+                        </span>
+                        <span className="playback-island-tooltip-title">
+                          {pickTitle(playbackSnapshot.item)}
+                        </span>
                       </span>
                     </>
                   ) : (
@@ -779,16 +812,6 @@ export default function Header({
       </div>
 
       <div className="top-bar-right">
-        <button
-          ref={changeServerBtnRef}
-          className="secondary desktop-only liquid-glass-btn lg-demo-target"
-          data-radius="999"
-          onClick={handleChangeServer}
-        >
-          <Server size={17} />
-          <span>Change Server</span>
-        </button>
-
         <div className="mobile-only" ref={menuRef}>
           <button
             ref={mobileMenuBtnRef}
@@ -808,8 +831,20 @@ export default function Header({
           >
             {showPlaybackInMenu && (
               <>
-                <DynamicIslandWaveform isPlaying={playbackSnapshot.isPlaying} size="sm" />
-                <span className="ios-playback-time">{formatPlaybackTime(playbackTime)}</span>
+                <img
+                  className="mobile-playback-art"
+                  src={playbackArtUrl || defaultArt}
+                  alt=""
+                  aria-hidden="true"
+                  onError={(event) => {
+                    event.currentTarget.src = defaultArt;
+                  }}
+                />
+                {playbackSnapshot.isPlaying ? (
+                  <span className="ios-playback-time">{formatPlaybackTime(playbackTime)}</span>
+                ) : (
+                  <Pause className="mobile-playback-paused" size={15} fill="currentColor" />
+                )}
               </>
             )}
             {isMenuOpen ? <X size={20} /> : <Menu size={20} />}
@@ -828,6 +863,11 @@ export default function Header({
                 const Icon = item.icon;
                 const isActive = activeSection === item.id;
                 const isHighlighted = mobileHighlightIdx === idx;
+                const isPlaybackItem =
+                  (item.id === 'music' || item.id === 'video') &&
+                  playbackSnapshot?.type === item.id &&
+                  playbackSnapshot.item;
+
                 return (
                   <button
                     key={item.id}
@@ -839,29 +879,16 @@ export default function Header({
                   >
                     <Icon size={18} />
                     <span>{item.label}</span>
+                    {isPlaybackItem && (
+                      <DynamicIslandWaveform
+                        size="md"
+                        isPlaying={playbackSnapshot.isPlaying}
+                        className="menu-item-waveform"
+                      />
+                    )}
                   </button>
                 );
               })}
-              <div className="menu-divider" />
-              {(() => {
-                const serverItem = MOBILE_MENU_ITEMS[3];
-                const Icon = serverItem.icon;
-                const idx = 3;
-                const isHighlighted = mobileHighlightIdx === idx;
-                return (
-                  <button
-                    key={serverItem.id}
-                    ref={(el) => (mobileItemsRef.current[idx] = el)}
-                    className={`menu-item ${isHighlighted ? 'highlighted' : ''}`}
-                    type="button"
-                    onClick={handleChangeServer}
-                    onMouseEnter={() => handleItemMouseEnter(idx)}
-                  >
-                    <Icon size={18} />
-                    <span>{serverItem.label}</span>
-                  </button>
-                );
-              })()}
             </div>
           )}
         </div>

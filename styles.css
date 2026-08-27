@@ -635,14 +635,60 @@ button.secondary:hover {
   gap: 0.75rem;
 }
 
+.app-icon-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  cursor: pointer;
+  line-height: 0;
+  overflow: hidden;
+  flex-shrink: 0;
+  transition: transform 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+}
+
+.app-icon-button:hover,
+.app-icon-button:focus-visible {
+  background: #22d3ee;
+  box-shadow: 0 0 18px rgba(34, 211, 238, 0.5);
+  transform: translateY(-1px) scale(1.04);
+}
+
+.app-icon-button:focus-visible {
+  outline: 2px solid #38bdf8;
+  outline-offset: 3px;
+}
+
 .app-icon {
-  width: 40px;
-  height: 40px;
+  width: 48px;
+  height: 48px;
   border-radius: 12px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   background: linear-gradient(135deg, #2d2d2d 0%, #232323 100%);
   object-fit: cover;
   flex-shrink: 0;
+}
+
+.app-icon-home {
+  display: none;
+  color: #082f49;
+  stroke-width: 2.5px;
+}
+
+.app-icon-button:hover .app-icon,
+.app-icon-button:focus-visible .app-icon {
+  display: none;
+}
+
+.app-icon-button:hover .app-icon-home,
+.app-icon-button:focus-visible .app-icon-home {
+  display: block;
 }
 
 .top-bar-title {
@@ -652,9 +698,10 @@ button.secondary:hover {
 }
 
 .top-bar-center {
-  flex: 1;
+  flex: 0 0 auto;
   display: flex;
-  justify-content: center;
+  justify-content: flex-end;
+  margin-left: auto;
 }
 
 .media-nav {
@@ -913,6 +960,112 @@ button.secondary:hover {
   white-space: nowrap;
 }
 
+.mobile-playback-art {
+  width: 21px;
+  height: 21px;
+  flex: 0 0 21px;
+  display: block;
+  object-fit: cover;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 50%;
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.35),
+    0 0 8px rgba(56, 189, 248, 0.18);
+}
+
+.desktop-playback-art {
+  width: 21px;
+  height: 21px;
+  flex: 0 0 21px;
+  display: block;
+  object-fit: cover;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 50%;
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.2);
+}
+
+.playback-island-tooltip {
+  position: absolute;
+  top: calc(100% + 0.65rem);
+  left: 50%;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 0.18rem;
+  width: max-content;
+  max-width: min(20rem, 42vw);
+  padding: 0.55rem 0.75rem;
+  border: 1px solid rgba(125, 211, 252, 0.35);
+  border-radius: 0.65rem;
+  background: rgba(8, 15, 32, 0.88);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  backdrop-filter: blur(18px) saturate(150%);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.38), 0 0 18px rgba(56, 189, 248, 0.12);
+  color: #f8fafc;
+  text-align: left;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -0.35rem);
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.ios-item:hover .playback-island-tooltip,
+.ios-item:focus-visible .playback-island-tooltip {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.playback-island-tooltip-type {
+  max-width: 100%;
+  overflow: hidden;
+  color: #67e8f9;
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.playback-island-tooltip-title {
+  overflow: hidden;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.playback-island-tooltip-header {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.playback-tooltip-waveform {
+  flex: 0 0 14px;
+  margin-left: auto;
+}
+
+.menu-playback-tooltip {
+  top: calc(100% + 0.65rem);
+  right: 0;
+  left: auto;
+  transform: translateY(-0.35rem);
+}
+
+.menu-button:hover .menu-playback-tooltip,
+.menu-button:focus-visible .menu-playback-tooltip {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.mobile-playback-paused {
+  flex: 0 0 15px;
+  color: #f1f5f9;
+}
+
 .ios-item:hover .ios-icon {
   transform: scale(1.1);
 }
@@ -1026,8 +1179,8 @@ button.menu-button {
 button.menu-button.playback-active {
   width: auto;
   min-width: 40px;
-  gap: 5px;
-  padding: 0 10px;
+  gap: 6px;
+  padding: 0 8px;
 }
 
 .menu-button:hover,
@@ -1184,6 +1337,11 @@ button.menu-button:active {
 .menu-item.active svg {
   stroke: #38bdf8;
   filter: drop-shadow(0 0 6px rgba(56, 189, 248, 0.6));
+}
+
+.menu-item-waveform {
+  margin-left: auto;
+  flex-shrink: 0;
 }
 
 .menu-divider {
@@ -2456,9 +2614,13 @@ input[type='search']::-ms-reveal {
 }
 
 .mini-player-timestamp {
-  display: none;
+  display: inline-block;
   white-space: nowrap;
   flex-shrink: 0;
+}
+
+.music-player-active #player .mini-player-timestamp {
+  display: none !important;
 }
 
 .player-timeline {
@@ -3059,10 +3221,10 @@ input[type='search']::-ms-reveal {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: min(52vw, 52dvh, max(780px, calc(2.16667 * 100dvh - 1560px))) !important;
+  width: min(80vw, calc(100dvh - 270px), 520px) !important;
   height: auto !important;
-  max-width: calc(100% - 10px) !important;
-  max-height: calc(100% - 10px) !important;
+  max-width: 100% !important;
+  max-height: 100% !important;
   aspect-ratio: 1 / 1 !important;
   padding: 0;
   margin: 0;
@@ -3108,6 +3270,65 @@ input[type='search']::-ms-reveal {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.player-art-zoom-button {
+  position: absolute;
+  right: 0.5rem;
+  bottom: 0.5rem;
+  z-index: 4;
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.34);
+  border-radius: 0.45rem;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.04) 48%, rgba(2, 6, 23, 0.5)),
+    rgba(15, 23, 42, 0.48);
+  color: rgba(255, 255, 255, 0.94);
+  cursor: pointer;
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  backdrop-filter: blur(16px) saturate(180%);
+  box-shadow:
+    0 6px 16px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.34),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease, background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.player-art-frame:hover .player-art-zoom-button,
+.player-art-zoom-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.player-art-zoom-button:hover,
+.player-art-zoom-button:focus-visible {
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.3), rgba(125, 211, 252, 0.16) 52%, rgba(2, 6, 23, 0.42)),
+    rgba(15, 23, 42, 0.54);
+  border-color: rgba(255, 255, 255, 0.62);
+  color: #ffffff;
+  box-shadow:
+    0 8px 20px rgba(0, 0, 0, 0.38),
+    0 0 16px rgba(56, 189, 248, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.48),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+  transform: translateY(-1px);
+}
+
+.player-art-zoom-button:active {
+  transform: scale(0.94);
+}
+
+.music-player-active #player .player-art-zoom-button {
+  right: clamp(0.65rem, 1.2vw, 1rem);
+  bottom: clamp(0.65rem, 1.2vw, 1rem);
 }
 
 .player-art-frame-blur {
@@ -3174,6 +3395,20 @@ input[type='search']::-ms-reveal {
   mask-image: radial-gradient(white, black);
   box-shadow: none;
   animation: none;
+}
+
+.music-player-active #player .player-art img.player-art-foreground.is-art-zoomed {
+  object-fit: cover !important;
+}
+
+.music-page.has-playing:not(.music-player-active) #player .player-art img.player-art-foreground.is-art-zoomed {
+  object-fit: cover !important;
+}
+
+@media (pointer: coarse) {
+  .player-art-zoom-button {
+    display: none;
+  }
 }
 
 .music-player-active #player .player-art img:not(.player-art-foreground) {
@@ -6249,7 +6484,7 @@ select,
 /* --- Queue Popup Toast Notification Styles --- */
 .queue-toast-container {
   position: fixed;
-  top: 4.8rem;
+  top: 0.65rem;
   left: 50%;
   transform: translateX(-50%);
   z-index: 100000 !important;
@@ -6388,7 +6623,7 @@ select,
 
 @media (max-width: 480px) {
   .queue-toast-container {
-    top: 4.2rem;
+    top: 0.55rem;
   }
 
   .queue-toast-title {

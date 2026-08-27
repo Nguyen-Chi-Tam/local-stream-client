@@ -1,10 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Shuffle, Repeat, SkipBack, SkipForward, Play, Pause, Rewind, FastForward } from 'lucide-react';
+import { Shuffle, Repeat, SkipBack, SkipForward, Play, Pause, Rewind, FastForward, ZoomIn, ZoomOut } from 'lucide-react';
 import { dequeueNext, showToast } from '../functions/queueService.js';
 
 export default function FullscreenMusicPlayer({
   currentlyPlaying,
   currentArtUrl,
+  isLargeLayout,
   isPlayerFullscreen,
   setPlayerFullscreen,
   scrollToCurrent,
@@ -39,11 +40,13 @@ export default function FullscreenMusicPlayer({
 }) {
   const MarqueeText = MarqueeTextComponent;
   const artTouchStartRef = useRef(null);
+  const artPinchRef = useRef(null);
   const artButtonRef = useRef(null);
 
   const playedRef = useRef(null);
   const rangeInputRef = useRef(null);
   const timeTextRef = useRef(null);
+  const miniTimeTextRef = useRef(null);
   const isScrubbingRef = useRef(false);
   const [isSeekbarActive, setIsSeekbarActive] = useState(false);
 
@@ -67,8 +70,12 @@ export default function FullscreenMusicPlayer({
           const sec = Math.floor(t);
           if (sec !== lastSec) {
             lastSec = sec;
+            const formatted = formatTime(t);
             if (timeTextRef.current) {
-              timeTextRef.current.textContent = formatTime(t);
+              timeTextRef.current.textContent = formatted;
+            }
+            if (miniTimeTextRef.current) {
+              miniTimeTextRef.current.textContent = formatted;
             }
           }
         }
@@ -102,7 +109,9 @@ export default function FullscreenMusicPlayer({
       } else {
         if (played) played.style.width = '0%';
       }
-      if (timeText) timeText.textContent = formatTime(actualTime);
+      const formatted = formatTime(actualTime);
+      if (timeText) timeText.textContent = formatted;
+      if (miniTimeTextRef.current) miniTimeTextRef.current.textContent = formatted;
     }
   }, [currentTime, currentDuration, currentlyPlaying, formatTime, pickDurationSeconds, audioRef]);
 
@@ -114,8 +123,12 @@ export default function FullscreenMusicPlayer({
       if (playedRef.current) {
         playedRef.current.style.width = `${pct}%`;
       }
+      const formatted = formatTime(val);
       if (timeTextRef.current) {
-        timeTextRef.current.textContent = formatTime(val);
+        timeTextRef.current.textContent = formatted;
+      }
+      if (miniTimeTextRef.current) {
+        miniTimeTextRef.current.textContent = formatted;
       }
     }
     handleSeek(e);
@@ -132,9 +145,11 @@ export default function FullscreenMusicPlayer({
   }
 
   const [displayArtUrl, setDisplayArtUrl] = useState(currentArtUrl);
+  const [isArtZoomed, setIsArtZoomed] = useState(false);
 
   useEffect(() => {
     setDisplayArtUrl(currentArtUrl);
+    setIsArtZoomed(false);
   }, [currentArtUrl]);
 
   function playPreviousTrack() {
@@ -156,6 +171,18 @@ export default function FullscreenMusicPlayer({
   const ignoreNextClickRef = useRef(false);
 
   function handleArtTouchStart(event) {
+    if (event.touches.length === 2) {
+      const firstTouch = event.touches[0];
+      const secondTouch = event.touches[1];
+      const deltaX = secondTouch.clientX - firstTouch.clientX;
+      const deltaY = secondTouch.clientY - firstTouch.clientY;
+      artTouchStartRef.current = null;
+      artPinchRef.current = {
+        distance: Math.hypot(deltaX, deltaY),
+        initialZoomed: isArtZoomed,
+      };
+      return;
+    }
     if (event.touches.length !== 1) return;
     const touch = event.touches[0];
     artTouchStartRef.current = {
@@ -166,7 +193,31 @@ export default function FullscreenMusicPlayer({
     };
   }
 
+  function handleArtTouchMove(event) {
+    if (event.touches.length !== 2 || !artPinchRef.current) return;
+
+    const firstTouch = event.touches[0];
+    const secondTouch = event.touches[1];
+    const deltaX = secondTouch.clientX - firstTouch.clientX;
+    const deltaY = secondTouch.clientY - firstTouch.clientY;
+    const distanceRatio = Math.hypot(deltaX, deltaY) / artPinchRef.current.distance;
+
+    if (event.cancelable) event.preventDefault();
+    if (distanceRatio >= 1.08) {
+      setIsArtZoomed(true);
+    } else if (distanceRatio <= 0.92) {
+      setIsArtZoomed(false);
+    } else {
+      setIsArtZoomed(artPinchRef.current.initialZoomed);
+    }
+  }
+
   function handleArtTouchEnd(event) {
+    if (artPinchRef.current) {
+      artPinchRef.current = null;
+      artTouchStartRef.current = null;
+      return;
+    }
     if (!artTouchStartRef.current) return;
 
     const start = artTouchStartRef.current;
@@ -214,6 +265,7 @@ export default function FullscreenMusicPlayer({
 
   function handleArtTouchCancel() {
     artTouchStartRef.current = null;
+    artPinchRef.current = null;
   }
 
   const effectiveAudioTime = (audioRef.current && Number.isFinite(audioRef.current.currentTime)) ? audioRef.current.currentTime : currentTime;
@@ -232,16 +284,24 @@ export default function FullscreenMusicPlayer({
         <div className="player-content select-none">
           <div className="player-main select-none">
             {currentlyPlaying && (
-              <button
+              <div
                 ref={artButtonRef}
-                type="button"
                 className="player-art select-none"
+                role="button"
+                tabIndex="0"
                 aria-label={isPlayerFullscreen ? 'Show music list (F)' : 'Show fullscreen album art (F)'}
                 title={isPlayerFullscreen ? 'Show music list (F)' : 'Show fullscreen album art (F)'}
                 style={{ touchAction: 'none' }}
                 onTouchStart={handleArtTouchStart}
+                onTouchMove={handleArtTouchMove}
                 onTouchEnd={handleArtTouchEnd}
                 onTouchCancel={handleArtTouchCancel}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    setPlayerFullscreen?.((prev) => !prev);
+                  }
+                }}
                 onClick={(event) => {
                   if (ignoreNextClickRef.current) {
                     event.preventDefault();
@@ -259,19 +319,36 @@ export default function FullscreenMusicPlayer({
                     style={{ backgroundImage: `url(${displayArtUrl})` }}
                   />
                   <img
-                    className="player-art-foreground select-none"
+                    className={`player-art-foreground select-none${isArtZoomed ? ' is-art-zoomed' : ''}`}
                     src={displayArtUrl}
                     alt={pickTitle(currentlyPlaying)}
                     draggable={false}
-                    style={{ pointerEvents: 'auto', WebkitTouchCallout: 'default', borderRadius: 'inherit' }}
+                    style={{ objectFit: isArtZoomed ? 'cover' : undefined, pointerEvents: 'auto', WebkitTouchCallout: 'default', borderRadius: 'inherit' }}
                     onError={() => {
                       if (displayArtUrl !== defaultArt) {
                         setDisplayArtUrl(defaultArt);
                       }
                     }}
                   />
+                  {(isPlayerFullscreen || isLargeLayout) && (
+                    <button
+                      type="button"
+                      className="player-art-zoom-button select-none"
+                      aria-label={isArtZoomed ? 'Show full album art' : 'Fill album art frame'}
+                      title={isArtZoomed ? 'Show full album art' : 'Fill album art frame'}
+                      onPointerDown={(event) => event.stopPropagation()}
+                      onTouchStart={(event) => event.stopPropagation()}
+                      onTouchEnd={(event) => event.stopPropagation()}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setIsArtZoomed((prev) => !prev);
+                      }}
+                    >
+                      {isArtZoomed ? <ZoomOut size={16} /> : <ZoomIn size={16} />}
+                    </button>
+                  )}
                 </div>
-              </button>
+              </div>
             )}
             <div className="player-info select-text">
               <div id="current-title" className="player-title select-text">
@@ -290,10 +367,14 @@ export default function FullscreenMusicPlayer({
                     <span className="player-artist-name select-text">
                       {pickArtist(currentlyPlaying)}
                     </span>
-                    <span className="mini-player-timestamp select-text">&nbsp;· {formatTime(effectiveAudioTime)}</span>
+                    <span className="mini-player-timestamp select-text">
+                      &nbsp;· <span ref={miniTimeTextRef}>{formatTime(effectiveAudioTime)}</span>
+                    </span>
                   </>
                 ) : (
-                  <span className="mini-player-timestamp select-text">{formatTime(effectiveAudioTime)}</span>
+                  <span className="mini-player-timestamp select-text">
+                    <span ref={miniTimeTextRef}>{formatTime(effectiveAudioTime)}</span>
+                  </span>
                 )}
               </div>
             </div>
