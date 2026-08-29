@@ -35,10 +35,11 @@ function loadSettings() {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (!Array.isArray(parsed.hiddenFolders)) parsed.hiddenFolders = [];
+      if (!parsed.sortKey || parsed.sortKey === 'original') parsed.sortKey = 'date';
       return parsed;
     }
   } catch {}
-  return { hiddenFolders: [] };
+  return { sortKey: 'date', hiddenFolders: [] };
 }
 
 function saveSettings(patch) {

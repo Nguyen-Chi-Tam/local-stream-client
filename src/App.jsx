@@ -5,6 +5,7 @@ import VideoPage from './pages/VideoPage.jsx';
 import PhotoPage from './pages/PhotoPage.jsx';
 import QueueToast from './components/QueueToast.jsx';
 import { clearMediaCache } from './functions/mediaApiCache.js';
+import { pickTitle, pickArtist } from './functions/mediaUtils.js';
 
 const STORAGE_KEY = 'localstream_server_url';
 const BASE_URL = (import.meta.env.BASE_URL || '/').replace(/\/+$/, '');
@@ -25,6 +26,30 @@ function stripBasePath(pathname) {
 function withBasePath(pathname) {
   const normalized = pathname && pathname.startsWith('/') ? pathname : '/';
   return APP_BASE ? `${APP_BASE}${normalized}` : normalized;
+}
+
+function formatPlaybackTitle(item) {
+  if (!item) return '';
+  const title = pickTitle(item);
+  const artist = pickArtist(item);
+  const hasValidArtist = artist && !/^unknown( artist)?$/i.test(artist.trim());
+  if (title && hasValidArtist) {
+    return `${title} \u2022 ${artist}`;
+  }
+  return title || '';
+}
+
+function getSectionTitle(section) {
+  switch (section) {
+    case 'video':
+      return 'Video \u2013 LocalStream Client';
+    case 'photo':
+    case 'photo-view':
+      return 'Photo \u2013 LocalStream Client';
+    case 'music':
+    default:
+      return 'Music \u2013 LocalStream Client';
+  }
 }
 
 export default function App() {
@@ -130,14 +155,36 @@ export default function App() {
   const isConnected = !!serverUrl;
   const section = getSectionFromPath(path);
 
-  // Update document.title based on connection state
+
+  // Update document.title based on media type and active playback (Spotify-style)
   useEffect(() => {
-    if (isConnected && section) {
-      document.title = 'Media \u2013 LocalStream Client';
-    } else {
-      document.title = 'LocalStream Client';
+    if (!isConnected || !section) {
+      if (document.title !== 'LocalStream Client') {
+        document.title = 'LocalStream Client';
+      }
+      return;
     }
-  }, [isConnected, section]);
+
+    const isPlaying = !!playbackSnapshot?.isPlaying;
+    const currentItem = playbackSnapshot?.item;
+    const playbackTitle = formatPlaybackTitle(currentItem);
+
+    // If currently playing audio/video anywhere, or if paused on the current section:
+    const isCurrentSectionPlayback =
+      (section === 'music' && playbackSnapshot?.type === 'music') ||
+      (section === 'video' && playbackSnapshot?.type === 'video');
+
+    let nextTitle = '';
+    if (playbackTitle && (isPlaying || isCurrentSectionPlayback)) {
+      nextTitle = playbackTitle;
+    } else {
+      nextTitle = getSectionTitle(section);
+    }
+
+    if (document.title !== nextTitle) {
+      document.title = nextTitle;
+    }
+  }, [isConnected, section, playbackSnapshot]);
 
   if (!section || !isConnected) {
     return <ConnectPage onConnected={handleConnected} />;

@@ -517,9 +517,10 @@ export function filterItems(items, query) {
 
 export function sortItems(items, sortKey, isSortReversed) {
   const arr = (items || []).slice();
+  const effectiveSortKey = (!sortKey || sortKey === 'original') ? 'date' : sortKey;
 
   arr.sort((a, b) => {
-    if (sortKey === 'name') {
+    if (effectiveSortKey === 'name') {
       const an = pickTitle(a).toLowerCase();
       const bn = pickTitle(b).toLowerCase();
       if (an < bn) return -1;
@@ -527,7 +528,7 @@ export function sortItems(items, sortKey, isSortReversed) {
       return 0;
     }
 
-    if (sortKey === 'duration') {
+    if (effectiveSortKey === 'duration') {
       const ad = pickDurationSeconds(a);
       const bd = pickDurationSeconds(b);
       return ad - bd;
@@ -544,8 +545,9 @@ export function sortItems(items, sortKey, isSortReversed) {
 
 export function sortFolderKeys(keys, items, sortKey, isSortReversed, getFolderName = pickFolderName) {
   const folderKeys = (keys || []).slice();
+  const effectiveSortKey = (!sortKey || sortKey === 'original') ? 'date' : sortKey;
 
-  if (sortKey !== 'date' && sortKey !== 'duration') {
+  if (effectiveSortKey === 'name') {
     return folderKeys.sort((a, b) => {
       const comparison = a.localeCompare(b, undefined, { sensitivity: 'base' });
       return isSortReversed ? -comparison : comparison;
@@ -559,11 +561,11 @@ export function sortFolderKeys(keys, items, sortKey, isSortReversed, getFolderNa
     const folder = getFolderName(item) || 'Other';
     if (!keySet.has(folder)) return;
 
-    const value = sortKey === 'duration' ? pickDurationSeconds(item) : pickDateValue(item);
+    const value = effectiveSortKey === 'duration' ? pickDurationSeconds(item) : pickDateValue(item);
     const current = boundaryDateByFolder.get(folder);
     if (
       current == null ||
-      (sortKey === 'duration'
+      (effectiveSortKey === 'duration'
         ? value > current
         : isSortReversed
           ? value > current

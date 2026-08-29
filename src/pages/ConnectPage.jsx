@@ -146,22 +146,32 @@ export default function ConnectPage({ onConnected }) {
     const cStart = typeof input.selectionStart === 'number' ? input.selectionStart : 0;
     const cEnd = typeof input.selectionEnd === 'number' ? input.selectionEnd : cStart;
 
-    const currentIndex = states.findIndex(
-      (s) => cStart < s.end && cEnd > s.start
-    );
+    const isCollapsed = cStart === cEnd;
+    const currentIndex = isCollapsed
+      ? states.findIndex((s) => cStart >= s.start && cStart <= s.end)
+      : states.findIndex((s) => cStart < s.end && cEnd > s.start);
 
-    const activeIndex = currentIndex !== -1
-      ? currentIndex
-      : direction === 'prev'
-        ? states.findLastIndex((s) => s.end <= cStart)
-        : states.findIndex((s) => s.start >= cEnd);
+    let targetIndex = -1;
 
-    const resolvedIndex = activeIndex === -1
-      ? direction === 'prev' ? states.length - 1 : 0
-      : activeIndex;
-    const targetIndex = direction === 'prev'
-      ? (resolvedIndex - 1 + states.length) % states.length
-      : (resolvedIndex + 1) % states.length;
+    if (currentIndex !== -1) {
+      targetIndex = direction === 'prev'
+        ? (currentIndex - 1 + states.length) % states.length
+        : (currentIndex + 1) % states.length;
+    } else {
+      if (direction === 'prev') {
+        let prevIndex = -1;
+        for (let i = states.length - 1; i >= 0; i -= 1) {
+          if (states[i].end <= cStart) {
+            prevIndex = i;
+            break;
+          }
+        }
+        targetIndex = prevIndex !== -1 ? prevIndex : states.length - 1;
+      } else {
+        const nextIndex = states.findIndex((s) => s.start >= cEnd);
+        targetIndex = nextIndex !== -1 ? nextIndex : 0;
+      }
+    }
 
     const targetState = states[targetIndex];
     input.focus();

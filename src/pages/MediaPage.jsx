@@ -103,12 +103,16 @@ function loadSettings() {
       if (!Array.isArray(parsed.hiddenFolders)) {
         parsed.hiddenFolders = [];
       }
+      if (!parsed.sortKey || parsed.sortKey === 'original') {
+        parsed.sortKey = 'date';
+      }
       return parsed;
     }
   } catch {
     // ignore
   }
   return {
+    sortKey: 'date',
     hiddenFolders: []
   };
 }
@@ -224,7 +228,10 @@ export default function MediaPage({
   const [allItems, setAllItems] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
-  const [sortKey, setSortKey] = useState(() => loadSettings().sortKey ?? 'original');
+  const [sortKey, setSortKey] = useState(() => {
+    const s = loadSettings().sortKey;
+    return (s && s !== 'original') ? s : 'date';
+  });
   const [isSortReversed, setIsSortReversed] = useState(() => loadSettings().isSortReversed ?? false);
   const [groupByFolder, setGroupByFolder] = useState(() => loadSettings().groupByFolder ?? true);
   const [hiddenFolders, setHiddenFolders] = useState(() => loadSettings().hiddenFolders ?? []);
