@@ -259,14 +259,15 @@ export default function MediaPage({
   const searchInputRef = useRef(null);
   const musicListRef = useRef(null);
   const scrollTrackRef = useRef(null);
+  const scrollThumbRef = useRef(null);
+  const [isDraggingThumb, setIsDraggingThumb] = useState(false);
+  const dragStartYRef = useRef(0);
+  const dragStartScrollTopRef = useRef(0);
+  const isDraggingRef = useRef(false);
   const searchHistoryAddedRef = useRef(false);
   const fullscreenHistoryAddedRef = useRef(false);
   const miniPlayerAutoOpenedRef = useRef(false);
   const { queue, removeFromQueue, isItemQueued } = useQueue();
-  const [isDraggingThumb, setIsDraggingThumb] = useState(false);
-  const dragStartY = useRef(0);
-  const dragStartScrollTop = useRef(0);
-  const scrollbarRafIdRef = useRef(0);
   const fullscreenTransitionTimerRef = useRef(0);
   const lastScrollTopRef = useRef(0);
   const containerRef = useRef(null);
@@ -389,13 +390,15 @@ export default function MediaPage({
   const updateScrollbar = useCallback(() => {
     const list = musicListRef.current;
     const track = scrollTrackRef.current;
-    if (!list || !track) return;
+    const thumb = scrollThumbRef.current;
+    if (!list || !track || !thumb) return;
 
     const scrollHeight = list.scrollHeight;
     const clientHeight = list.clientHeight;
     const scrollTop = list.scrollTop;
+    const trackHeight = track.clientHeight;
 
-    if (scrollHeight <= clientHeight + 1) {
+    if (scrollHeight <= clientHeight + 1 || trackHeight <= 0) {
       track.style.opacity = '0';
       track.style.pointerEvents = 'none';
       return;
@@ -403,23 +406,19 @@ export default function MediaPage({
 
     track.style.opacity = '1';
     track.style.pointerEvents = 'auto';
-    const thumbHeight = Math.max((clientHeight / scrollHeight) * 100, 10);
-    const thumbTop = (scrollTop / (scrollHeight - clientHeight)) * (100 - thumbHeight);
 
-    list.parentElement.style.setProperty('--thumb-height', `${thumbHeight}%`);
-    list.parentElement.style.setProperty('--thumb-top', `${thumbTop}%`);
+    const minThumbHeight = 24;
+    const thumbHeight = Math.max((clientHeight / scrollHeight) * trackHeight, minThumbHeight);
+    const maxScrollTop = scrollHeight - clientHeight;
+    const maxThumbTop = trackHeight - thumbHeight;
+    const thumbTop = maxScrollTop > 0 ? (scrollTop / maxScrollTop) * maxThumbTop : 0;
+
+    thumb.style.height = `${thumbHeight}px`;
+    thumb.style.transform = `translate3d(0, ${thumbTop}px, 0)`;
   }, []);
 
-  const queueScrollbarUpdate = useCallback(() => {
-    if (scrollbarRafIdRef.current) return;
-    scrollbarRafIdRef.current = window.requestAnimationFrame(() => {
-      scrollbarRafIdRef.current = 0;
-      updateScrollbar();
-    });
-  }, [updateScrollbar]);
-
   const handleScroll = useCallback(() => {
-    queueScrollbarUpdate();
+    updateScrollbar();
     const list = musicListRef.current;
     if (!list) return;
 
@@ -428,78 +427,87 @@ export default function MediaPage({
       lastScrollTopRef.current = scrollTop;
       setScrollOffset(scrollTop);
     }
-  }, [queueScrollbarUpdate]);
+  }, [updateScrollbar]);
 
   useEffect(() => {
     const list = musicListRef.current;
     if (list) {
       list.addEventListener('scroll', handleScroll, { passive: true });
-      window.addEventListener('resize', queueScrollbarUpdate);
-      const observer = new MutationObserver(queueScrollbarUpdate);
+      window.addEventListener('resize', updateScrollbar);
+      const observer = new MutationObserver(updateScrollbar);
       observer.observe(list, { childList: true, subtree: true });
-      queueScrollbarUpdate();
+      updateScrollbar();
       return () => {
         list.removeEventListener('scroll', handleScroll);
-        window.removeEventListener('resize', queueScrollbarUpdate);
+        window.removeEventListener('resize', updateScrollbar);
         observer.disconnect();
-        if (scrollbarRafIdRef.current) {
-          window.cancelAnimationFrame(scrollbarRafIdRef.current);
-          scrollbarRafIdRef.current = 0;
-        }
       };
     }
-  }, [handleScroll, queueScrollbarUpdate, allItems]);
+  }, [handleScroll, updateScrollbar, allItems]);
 
-  const handleThumbMouseMove = useCallback((e) => {
+  const handleThumbPointerDown = (e) => {
+    const list = musicListRef.current;
+    if (!list) return;
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch (_) {}
+    isDraggingRef.current = true;
+    setIsDraggingThumb(true);
+    dragStartYRef.current = e.clientY;
+    dragStartScrollTopRef.current = list.scrollTop;
+  };
+
+  const handleThumbPointerMove = (e) => {
+    if (!isDraggingRef.current) return;
     const list = musicListRef.current;
     const track = scrollTrackRef.current;
-    if (!list || !track || !dragStartY.current) return;
+    const thumb = scrollThumbRef.current;
+    if (!list || !track || !thumb) return;
 
-    const deltaY = e.clientY - dragStartY.current;
+    const deltaY = e.clientY - dragStartYRef.current;
     const trackHeight = track.clientHeight;
+    const thumbHeight = thumb.clientHeight || 24;
     const scrollHeight = list.scrollHeight;
     const clientHeight = list.clientHeight;
 
-    const scrollableHeight = scrollHeight - clientHeight;
-    const actualThumbHeight = Math.max((clientHeight / scrollHeight) * trackHeight, trackHeight * 0.1);
-    const scrollDelta = (deltaY / (trackHeight - actualThumbHeight)) * scrollableHeight;
+    const maxScrollTop = scrollHeight - clientHeight;
+    const maxThumbTop = trackHeight - thumbHeight;
+    if (maxThumbTop <= 0) return;
 
-    list.scrollTop = dragStartScrollTop.current + scrollDelta;
-  }, []);
+    const scrollRatio = maxScrollTop / maxThumbTop;
+    list.scrollTop = dragStartScrollTopRef.current + deltaY * scrollRatio;
+  };
 
-  const handleThumbMouseUp = useCallback(() => {
-    setIsDraggingThumb(false);
-    dragStartY.current = 0;
-    document.removeEventListener('mousemove', handleThumbMouseMove);
-    document.removeEventListener('mouseup', handleThumbMouseUp);
-    document.body.style.userSelect = '';
-  }, [handleThumbMouseMove]);
-
-  const handleThumbMouseDown = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDraggingThumb(true);
-    dragStartY.current = e.clientY;
-    dragStartScrollTop.current = musicListRef.current.scrollTop;
-    document.addEventListener('mousemove', handleThumbMouseMove);
-    document.addEventListener('mouseup', handleThumbMouseUp);
-    document.body.style.userSelect = 'none';
+  const handleThumbPointerUp = (e) => {
+    if (isDraggingRef.current) {
+      isDraggingRef.current = false;
+      setIsDraggingThumb(false);
+      try {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      } catch (_) {}
+    }
   };
 
   const handleTrackClick = (e) => {
     if (e.target === scrollTrackRef.current) {
       const list = musicListRef.current;
       const track = scrollTrackRef.current;
+      const thumb = scrollThumbRef.current;
+      if (!list || !track || !thumb) return;
+
       const rect = track.getBoundingClientRect();
       const clickY = e.clientY - rect.top;
-      const thumbHeightFactor = list.clientHeight / list.scrollHeight;
       const trackHeight = track.clientHeight;
-      const thumbHeight = Math.max(trackHeight * thumbHeightFactor, trackHeight * 0.1);
+      const thumbHeight = thumb.clientHeight || 24;
+      const maxScrollTop = list.scrollHeight - list.clientHeight;
+      const maxThumbTop = trackHeight - thumbHeight;
+      if (maxThumbTop <= 0) return;
 
-      // Center the thumb on the click position
       const targetThumbTop = clickY - thumbHeight / 2;
-      const scrollPercent = Math.max(0, Math.min(1, targetThumbTop / (trackHeight - thumbHeight)));
-      list.scrollTop = (list.scrollHeight - list.clientHeight) * scrollPercent;
+      const scrollPercent = Math.max(0, Math.min(1, targetThumbTop / maxThumbTop));
+      list.scrollTo({ top: maxScrollTop * scrollPercent, behavior: 'smooth' });
     }
   };
 
@@ -1325,7 +1333,6 @@ export default function MediaPage({
     }
   }
 
-
   useEffect(() => {
     if (!isActivePage) return;
 
@@ -1692,7 +1699,11 @@ export default function MediaPage({
               >
                 <div
                   className={`scrollbar-thumb ${isDraggingThumb ? 'dragging' : ''}`}
-                  onMouseDown={handleThumbMouseDown}
+                  ref={scrollThumbRef}
+                  onPointerDown={handleThumbPointerDown}
+                  onPointerMove={handleThumbPointerMove}
+                  onPointerUp={handleThumbPointerUp}
+                  onPointerCancel={handleThumbPointerUp}
                 />
               </div>
               <button

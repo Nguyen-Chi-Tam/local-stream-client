@@ -77,6 +77,7 @@ function normalizeUrl(raw) {
 
 export default function ConnectPage({ onConnected }) {
   const inputRef = useRef(null);
+  const isInputFocusedRef = useRef(false);
   const [value, setValue] = useState(() => {
     try {
       const stored = window.localStorage.getItem(STORAGE_KEY);
@@ -143,38 +144,45 @@ export default function ConnectPage({ onConnected }) {
     const states = getNavStates(text);
     if (!states.length) return;
 
-    const cStart = typeof input.selectionStart === 'number' ? input.selectionStart : 0;
-    const cEnd = typeof input.selectionEnd === 'number' ? input.selectionEnd : cStart;
-
-    const isCollapsed = cStart === cEnd;
-    const currentIndex = isCollapsed
-      ? states.findIndex((s) => cStart >= s.start && cStart <= s.end)
-      : states.findIndex((s) => cStart < s.end && cEnd > s.start);
+    const isFocused = isInputFocusedRef.current || document.activeElement === input;
 
     let targetIndex = -1;
 
-    if (currentIndex !== -1) {
-      targetIndex = direction === 'prev'
-        ? (currentIndex - 1 + states.length) % states.length
-        : (currentIndex + 1) % states.length;
+    if (!isFocused) {
+      targetIndex = direction === 'prev' ? states.length - 1 : 0;
     } else {
-      if (direction === 'prev') {
-        let prevIndex = -1;
-        for (let i = states.length - 1; i >= 0; i -= 1) {
-          if (states[i].end <= cStart) {
-            prevIndex = i;
-            break;
-          }
-        }
-        targetIndex = prevIndex !== -1 ? prevIndex : states.length - 1;
+      const cStart = typeof input.selectionStart === 'number' ? input.selectionStart : 0;
+      const cEnd = typeof input.selectionEnd === 'number' ? input.selectionEnd : cStart;
+
+      const isCollapsed = cStart === cEnd;
+      const currentIndex = isCollapsed
+        ? states.findIndex((s) => cStart >= s.start && cStart <= s.end)
+        : states.findIndex((s) => cStart < s.end && cEnd > s.start);
+
+      if (currentIndex !== -1) {
+        targetIndex = direction === 'prev'
+          ? (currentIndex - 1 + states.length) % states.length
+          : (currentIndex + 1) % states.length;
       } else {
-        const nextIndex = states.findIndex((s) => s.start >= cEnd);
-        targetIndex = nextIndex !== -1 ? nextIndex : 0;
+        if (direction === 'prev') {
+          let prevIndex = -1;
+          for (let i = states.length - 1; i >= 0; i -= 1) {
+            if (states[i].end <= cStart) {
+              prevIndex = i;
+              break;
+            }
+          }
+          targetIndex = prevIndex !== -1 ? prevIndex : states.length - 1;
+        } else {
+          const nextIndex = states.findIndex((s) => s.start >= cEnd);
+          targetIndex = nextIndex !== -1 ? nextIndex : 0;
+        }
       }
     }
 
     const targetState = states[targetIndex];
     input.focus();
+    isInputFocusedRef.current = true;
     input.setSelectionRange(targetState.start, targetState.end);
   };
 
@@ -269,6 +277,7 @@ export default function ConnectPage({ onConnected }) {
                     <button
                       type="button"
                       className="label-nav-button"
+                      onMouseDown={(e) => e.preventDefault()}
                       onClick={() => moveToNumberPart('prev')}
                       aria-label="Select previous number"
                       title="Select previous number"
@@ -279,6 +288,7 @@ export default function ConnectPage({ onConnected }) {
                     <button
                       type="button"
                       className="label-nav-button"
+                      onMouseDown={(e) => e.preventDefault()}
                       onClick={() => moveToNumberPart('next')}
                       aria-label="Select next number"
                       title="Select next number"
@@ -297,6 +307,12 @@ export default function ConnectPage({ onConnected }) {
                     required
                     value={value}
                     onChange={(e) => setValue(e.target.value)}
+                    onFocus={() => {
+                      isInputFocusedRef.current = true;
+                    }}
+                    onBlur={() => {
+                      isInputFocusedRef.current = false;
+                    }}
                     ref={inputRef}
                   />
                   <button

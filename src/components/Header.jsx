@@ -864,9 +864,22 @@ export default function Header({
                 const isActive = activeSection === item.id;
                 const isHighlighted = mobileHighlightIdx === idx;
                 const isPlaybackItem =
+                  activeSection !== item.id &&
                   (item.id === 'music' || item.id === 'video') &&
                   playbackSnapshot?.type === item.id &&
                   playbackSnapshot.item;
+
+                let displayText = item.label;
+                if (isPlaybackItem) {
+                  const title = pickTitle(playbackSnapshot.item);
+                  const artist = pickArtist(playbackSnapshot.item);
+                  const hasValidArtist = artist && !/^unknown( artist)?$/i.test(artist.trim());
+                  if (title) {
+                    displayText = hasValidArtist
+                      ? `${item.label} \u2022 ${title} \u2022 ${artist}`
+                      : `${item.label} \u2022 ${title}`;
+                  }
+                }
 
                 return (
                   <button
@@ -877,8 +890,19 @@ export default function Header({
                     onClick={() => handleNavigate(item.path)}
                     onMouseEnter={() => handleItemMouseEnter(idx)}
                   >
-                    <Icon size={18} />
-                    <span>{item.label}</span>
+                    <Icon size={18} style={{ flexShrink: 0 }} />
+                    {isPlaybackItem ? (
+                      <span className="menu-item-text marquee">
+                        <span className="marquee-content">
+                          <span>{displayText}</span>
+                          <span className="marquee-separator">•</span>
+                          <span>{displayText}</span>
+                          <span className="marquee-separator">•</span>
+                        </span>
+                      </span>
+                    ) : (
+                      <span className="menu-item-text">{displayText}</span>
+                    )}
                     {isPlaybackItem && (
                       <DynamicIslandWaveform
                         size="md"

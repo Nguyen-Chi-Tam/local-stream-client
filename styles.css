@@ -1344,6 +1344,48 @@ button.menu-button:active {
   flex-shrink: 0;
 }
 
+.menu-item-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.menu-item-text.marquee {
+  position: relative !important;
+  overflow: hidden !important;
+  text-overflow: clip !important;
+  white-space: nowrap !important;
+  display: flex !important;
+  mask-image: linear-gradient(to right, black calc(100% - 14px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, black calc(100% - 14px), transparent 100%);
+}
+
+.menu-item-text.marquee .marquee-content {
+  display: inline-flex !important;
+  align-items: center;
+  flex-shrink: 0;
+  white-space: nowrap !important;
+  will-change: transform;
+  animation: menu-item-marquee 14s linear infinite 1s;
+}
+
+.menu-item-text.marquee .marquee-separator {
+  display: inline-block;
+  padding: 0 1.25rem;
+  opacity: 0.5;
+}
+
+@keyframes menu-item-marquee {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
 .menu-divider {
   height: 1px;
   background: rgba(255, 255, 255, 0.08);
@@ -1544,21 +1586,79 @@ input[type='search']::-ms-reveal {
   min-width: 0;
 }
 
-.music-list-shell .music-list {
-  /* Firefox */
-  -ms-overflow-style: none;
-  /* IE/Edge */
+/* ==============================================================================
+   Modern Custom Scrollbar (Firefox & Standard CSS)
+   ============================================================================== */
+@supports (scrollbar-width: thin) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+  }
+  *:hover {
+    scrollbar-color: rgba(56, 189, 248, 0.65) transparent;
+  }
 }
 
-.music-list-shell .music-list::-webkit-scrollbar {
-  display: none;
-  /* Chrome/Safari/Webkit */
+/* ==============================================================================
+   WebKit Custom Scrollbar (Chrome, Edge, Safari, Opera, Brave)
+   ============================================================================== */
+/* Base dimensions (8px width, with 2px transparent border to render at 4px resting thickness) */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+/* Transparent track so it blends seamlessly into the dark background */
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Normal thumb: 4px visual thickness via 2px transparent border, pill shape */
+::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.2);
+  background-clip: padding-box;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  transition: background-color 0.2s ease, border-width 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* Hover: Thicken to full width (0px border), brighten and glow with sky-blue accent */
+::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(56, 189, 248, 0.65);
+  background-clip: border-box;
+  border: 0px solid transparent;
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.4);
+}
+
+/* Active (dragging): vibrant sky-blue accent */
+::-webkit-scrollbar-thumb:active {
+  background-color: #38bdf8;
+  background-clip: border-box;
+  border: 0px solid transparent;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.6);
+}
+
+/* Intersection corner */
+::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 .music-list-shell {
   display: flex;
   align-items: stretch;
   gap: 0.5rem;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+.music-list-shell .music-list {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+
+.music-list-shell .music-list::-webkit-scrollbar {
+  display: none; /* Chrome/Safari/Webkit */
 }
 
 .music-side-rail {
@@ -1569,46 +1669,52 @@ input[type='search']::-ms-reveal {
   padding: 0.25rem 0;
   width: 20px;
   flex-shrink: 0;
+  user-select: none;
 }
 
 .scrollbar-track {
   width: 4px;
-  flex: 1;
+  flex: 1 1 auto;
   position: relative;
   background: rgba(255, 255, 255, 0.05);
   border-radius: 999px;
   margin: 0.2rem 0;
   cursor: pointer;
-  transition: background 0.2s;
+  touch-action: none;
+  transition: width 0.2s ease, background-color 0.2s ease;
 }
 
+.music-side-rail:hover .scrollbar-track,
 .scrollbar-track:hover {
-  background: rgba(255, 255, 255, 0.1);
+  width: 8px;
+  background-color: rgba(255, 255, 255, 0.1);
 }
 
 .scrollbar-thumb {
   position: absolute;
   width: 100%;
   left: 0;
-  background: rgba(255, 255, 255, 0.2);
+  top: 0;
+  background-color: rgba(255, 255, 255, 0.25);
   border-radius: 999px;
-  height: var(--thumb-height, 20%);
-  top: var(--thumb-top, 0%);
-  transition: background 0.2s, top 0.12s ease-out;
+  border: 1px solid rgba(255, 255, 255, 0.05);
   cursor: grab;
+  touch-action: none;
+  will-change: transform;
+  transition: background-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-.scrollbar-thumb:active {
-  cursor: grabbing;
-}
-
+.music-side-rail:hover .scrollbar-thumb,
 .scrollbar-thumb:hover,
 .scrollbar-thumb.dragging {
-  background: rgba(56, 189, 248, 0.6);
+  background-color: rgba(56, 189, 248, 0.65);
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.4);
 }
 
 .scrollbar-thumb.dragging {
-  transition: background 0.2s;
+  background-color: #38bdf8;
+  cursor: grabbing;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.6);
 }
 
 .folder-header {
