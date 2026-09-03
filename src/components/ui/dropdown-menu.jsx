@@ -36,7 +36,7 @@ function DropdownMenuContent({
         sideOffset={sideOffset}
         align={align}
         className={cn(
-          "z-[9999] min-w-44 overflow-hidden rounded-xl bg-slate-900 text-slate-100 p-1.5 shadow-2xl border border-slate-700/80 data-[state=closed]:overflow-hidden data-open:animate-in data-open:fade-in-0 data-open:slide-in-from-bottom-3 data-open:duration-200 data-open:ease-out data-closed:animate-out data-closed:fade-out-0 data-closed:slide-out-to-bottom-3 data-closed:duration-150 data-closed:ease-in",
+          "z-[9999] min-w-44 overflow-hidden rounded-xl bg-slate-900 text-slate-100 p-1.5 shadow-2xl border border-slate-700/80 data-[state=closed]:overflow-hidden data-open:animate-in data-open:fade-in-0 data-open:slide-in-from-top-2 data-open:duration-200 data-open:ease-out data-closed:animate-out data-closed:fade-out-0 data-closed:slide-out-to-top-2 data-closed:duration-150 data-closed:ease-in",
           className
         )}
         {...props} />
@@ -212,7 +212,7 @@ function DropdownMenuSubContent({
       <DropdownMenuPrimitive.SubContent
         data-slot="dropdown-menu-sub-content"
         className={cn(
-          "z-[99999] min-w-44 overflow-hidden rounded-xl bg-slate-900/95 backdrop-blur-md text-slate-100 p-1.5 shadow-2xl border border-slate-700/80 data-open:animate-in data-open:fade-in-0 data-open:slide-in-from-bottom-3 data-open:duration-200 data-open:ease-out data-closed:animate-out data-closed:fade-out-0 data-closed:slide-out-to-bottom-3 data-closed:duration-150 data-closed:ease-in",
+          "z-[99999] min-w-44 overflow-hidden rounded-xl bg-slate-900/95 backdrop-blur-md text-slate-100 p-1.5 shadow-2xl border border-slate-700/80 data-open:animate-in data-open:fade-in-0 data-open:slide-in-from-top-2 data-open:duration-200 data-open:ease-out data-closed:animate-out data-closed:fade-out-0 data-closed:slide-out-to-top-2 data-closed:duration-150 data-closed:ease-in",
           className
         )}
         {...props} />

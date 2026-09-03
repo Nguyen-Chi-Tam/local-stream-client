@@ -10,7 +10,7 @@ import PhotoViewPage from './PhotoViewPage.jsx';
 import { useMediaPlayer } from '../functions/mediaService.js';
 import MediaItem from '../components/MediaItem.jsx';
 import { dequeueNext, useQueue, applyQueueGrouping, getQueuePosition, showToast } from '../functions/queueService.js';
-import { NativeSelect, NativeSelectOption } from '../components/ui/native-select.jsx';
+import SortDropdown from '../components/SortDropdown.jsx';
 import {
   getItemId,
   getMediaType,
@@ -29,66 +29,7 @@ import {
   extractTitleFromPath,
   formatTime,
 } from '../functions/mediaUtils.js';
-
-const MarqueeText = ({ text, className, onClick, enabled = true }) => {
-  const containerRef = useRef(null);
-  const [isOverflowing, setIsOverflowing] = useState(false);
-
-  useEffect(() => {
-    if (!enabled) {
-      setIsOverflowing(false);
-      return;
-    }
-
-    const checkOverflow = () => {
-      const el = containerRef.current;
-      if (el) {
-        const isMarqueeActive = el.classList.contains('marquee');
-        const scrollW = el.scrollWidth;
-        const clientW = el.clientWidth;
-
-        // If marquee is active, scrollWidth includes the 100% left padding
-        const actualTextWidth = isMarqueeActive ? (scrollW - clientW) : scrollW;
-
-        const overflowing = actualTextWidth > clientW + 2;
-        setIsOverflowing(overflowing);
-      }
-    };
-
-    // Check immediately and then after a frame to catch layout changes
-    checkOverflow();
-    const raf = requestAnimationFrame(checkOverflow);
-    const timeout = setTimeout(checkOverflow, 160); // Slightly longer for stability
-
-    window.addEventListener('resize', checkOverflow);
-    return () => {
-      cancelAnimationFrame(raf);
-      clearTimeout(timeout);
-      window.removeEventListener('resize', checkOverflow);
-    };
-  }, [text, enabled]);
-
-  const marqueeClass = (enabled && isOverflowing) ? 'marquee' : '';
-
-  if (onClick) {
-    return (
-      <button
-        type="button"
-        ref={containerRef}
-        onClick={onClick}
-        className={`${className} ${marqueeClass}`}
-      >
-        <span className="marquee-inner">{text}</span>
-      </button>
-    );
-  }
-
-  return (
-    <div ref={containerRef} className={`${className} ${marqueeClass}`}>
-      <span className="marquee-inner">{text}</span>
-    </div>
-  );
-};
+import MarqueeText from '../components/MarqueeText.jsx';
 
 
 const STORAGE_KEY = 'localstream_server_url';
@@ -1509,10 +1450,15 @@ export default function MediaPage({
               <label htmlFor="sort-select" className="sort-label">
                 Sort by
               </label>
-              <NativeSelect
+              <SortDropdown
                 id="sort-select"
-                aria-label="Sort music list"
+                ariaLabel="Sort music list"
                 value={sortKey}
+                options={[
+                  { value: 'date', label: 'Date' },
+                  { value: 'name', label: 'Name' },
+                  { value: 'duration', label: 'Duration' },
+                ]}
                 onChange={(e) => {
                   const val = e.target.value || '';
                   setSortKey(val);
@@ -1520,11 +1466,7 @@ export default function MediaPage({
                   const label = labels[val] || (val ? val.charAt(0).toUpperCase() + val.slice(1) : 'Default');
                   showToast({ action: 'sort', message: `Sort by: ${label}` });
                 }}
-              >
-                <NativeSelectOption value="date">Date</NativeSelectOption>
-                <NativeSelectOption value="name">Name</NativeSelectOption>
-                <NativeSelectOption value="duration">Duration</NativeSelectOption>
-              </NativeSelect>
+              />
               <button
                 id="sort-reverse"
                 type="button"

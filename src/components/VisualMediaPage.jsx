@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AudioLines, Play, Pause, Rewind, FastForward, SkipBack, SkipForward, Delete } from 'lucide-react';
 import { fetchMediaItemsCached, getMediaEndpoint } from '../functions/mediaApiCache.js';
-import { NativeSelect, NativeSelectOption } from './ui/native-select.jsx';
+import SortDropdown from './SortDropdown.jsx';
 import MediaItem from './MediaItem.jsx';
 import PhotoItem from './PhotoItem.jsx';
 import { showToast } from '../functions/queueService.js';
@@ -420,10 +420,15 @@ export default function VisualMediaPage({
               <label htmlFor="visual-sort-select" className="sort-label">
                 Sort by
               </label>
-              <NativeSelect
+              <SortDropdown
                 id="visual-sort-select"
-                aria-label="Sort media list"
+                ariaLabel="Sort media list"
                 value={sortKey}
+                options={[
+                  { value: 'date', label: 'Date' },
+                  { value: 'name', label: 'Name' },
+                  ...(isVideoMode ? [{ value: 'duration', label: 'Duration' }] : []),
+                ]}
                 onChange={(e) => {
                   const val = e.target.value || 'date';
                   setSortKey(val);
@@ -431,11 +436,7 @@ export default function VisualMediaPage({
                   const label = labels[val] || (val ? val.charAt(0).toUpperCase() + val.slice(1) : 'Date');
                   showToast({ action: 'sort', message: `Sort by: ${label}` });
                 }}
-              >
-                <NativeSelectOption value="date">Date</NativeSelectOption>
-                <NativeSelectOption value="name">Name</NativeSelectOption>
-                {isVideoMode && <NativeSelectOption value="duration">Duration</NativeSelectOption>}
-              </NativeSelect>
+              />
               <button
                 type="button"
                 className="icon-button sort-icon-button"

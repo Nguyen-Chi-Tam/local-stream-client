@@ -9,7 +9,7 @@ import FullscreenVideoPlayer from './FullscreenVideoPlayer.jsx';
 import { useMediaPlayer } from '../functions/mediaService.js';
 import MediaItem from '../components/MediaItem.jsx';
 import { useQueue, applyQueueGrouping, getQueuePosition, dequeueNext, showToast } from '../functions/queueService.js';
-import { NativeSelect, NativeSelectOption } from '../components/ui/native-select.jsx';
+import SortDropdown from '../components/SortDropdown.jsx';
 import { generateSpriteSheet, getCachedSprite } from '../functions/spriteSheetGenerator.js';
 import {
   getItemId,
@@ -2523,10 +2523,15 @@ export default function VideoPage({
               <label htmlFor="video-sort-select" className="sort-label">
                 Sort by
               </label>
-              <NativeSelect
+              <SortDropdown
                 id="video-sort-select"
-                aria-label="Sort media list"
+                ariaLabel="Sort media list"
                 value={sortKey}
+                options={[
+                  { value: 'date', label: 'Date' },
+                  { value: 'name', label: 'Name' },
+                  { value: 'duration', label: 'Duration' },
+                ]}
                 onChange={(e) => {
                   const val = e.target.value || 'date';
                   setSortKey(val);
@@ -2535,11 +2540,7 @@ export default function VideoPage({
                   showToast({ action: 'sort', message: `Sort by: ${label}` });
                 }}
                 style={{ minWidth: '6.5rem' }}
-              >
-                <NativeSelectOption value="date">Date</NativeSelectOption>
-                <NativeSelectOption value="name">Name</NativeSelectOption>
-                <NativeSelectOption value="duration">Duration</NativeSelectOption>
-              </NativeSelect>
+              />
               <button
                 type="button"
                 className="icon-button sort-icon-button"

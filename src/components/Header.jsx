@@ -7,6 +7,7 @@ import { fetchMediaItemsCached, getCachedMediaItems } from '../functions/mediaAp
 import { getMediaType, pickThumbnailUrl, pickTitle, pickArtist } from '../functions/mediaUtils.js';
 import { applyGlass, removeGlass, DEFAULT_SWITCHER_CONFIG } from '../lib/liquidGlass.js';
 import DynamicIslandWaveform from './DynamicIslandWaveform.jsx';
+import MarqueeText from './MarqueeText.jsx';
 
 const NAV_ITEMS = [
   { id: 'music', label: 'Music', path: '/media', icon: Music },
@@ -891,18 +892,11 @@ export default function Header({
                     onMouseEnter={() => handleItemMouseEnter(idx)}
                   >
                     <Icon size={18} style={{ flexShrink: 0 }} />
-                    {isPlaybackItem ? (
-                      <span className="menu-item-text marquee">
-                        <span className="marquee-content">
-                          <span>{displayText}</span>
-                          <span className="marquee-separator">•</span>
-                          <span>{displayText}</span>
-                          <span className="marquee-separator">•</span>
-                        </span>
-                      </span>
-                    ) : (
-                      <span className="menu-item-text">{displayText}</span>
-                    )}
+                    <MarqueeText
+                      text={displayText}
+                      className="menu-item-text"
+                      enabled={isPlaybackItem}
+                    />
                     {isPlaybackItem && (
                       <DynamicIslandWaveform
                         size="md"

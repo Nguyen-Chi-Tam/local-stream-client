@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Shuffle, Repeat, SkipBack, SkipForward, Play, Pause, Rewind, FastForward, ZoomIn, ZoomOut } from 'lucide-react';
 import { dequeueNext, showToast } from '../functions/queueService.js';
+import MarqueeText from '../components/MarqueeText.jsx';
 
 export default function FullscreenMusicPlayer({
   currentlyPlaying,
@@ -352,14 +353,15 @@ export default function FullscreenMusicPlayer({
             )}
             <div className="player-info select-text">
               <div id="current-title" className="player-title select-text">
-                <button
+                <MarqueeText
+                  as="button"
                   type="button"
                   className="player-title-button select-text"
                   onClick={scrollToCurrent}
                   title={currentlyPlaying ? pickTitle(currentlyPlaying) : ''}
-                >
-                  {currentlyPlaying ? pickTitle(currentlyPlaying) : ''}
-                </button>
+                  text={currentlyPlaying ? pickTitle(currentlyPlaying) : ''}
+                  enabled={!isPlayerFullscreen}
+                />
               </div>
               <div id="current-artist" className="player-artist select-text">
                 {currentlyPlaying && pickArtist(currentlyPlaying) ? (

@@ -590,6 +590,7 @@ export function getMediaType(item) {
   if (raw === 'IMAGE' || raw === 'PHOTO' || raw === 'PICTURE' || raw === 'IMG') return 'IMAGE';
   if (raw === 'AUDIO' || raw === 'MUSIC' || raw === 'SONG' || raw === 'TRACK') return 'AUDIO';
   if (raw === 'VIDEO' || raw === 'MOVIE' || raw === 'FILM' || raw === 'VID') return 'VIDEO';
+  if (raw === 'OTHER' || raw === 'FILE' || raw === 'DOCUMENT' || raw === 'DOC') return 'OTHER';
 
   const mime = (item.mime || item.mimeType || item.contentType || '').toString().toLowerCase();
   if (mime.startsWith('image/')) return 'IMAGE';
@@ -601,5 +602,5 @@ export function getMediaType(item) {
   if (/\.(mp3|flac|wav|aac|ogg|m4a|wma|opus|aiff?|alac)$/i.test(path)) return 'AUDIO';
   if (/\.(mp4|mkv|avi|mov|wmv|flv|webm|m4v|3gp|ts)$/i.test(path)) return 'VIDEO';
 
-  return raw;
+  return raw || 'OTHER';
 }

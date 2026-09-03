@@ -8,7 +8,7 @@ import PhotoViewPage from './PhotoViewPage.jsx';
 import { SkeletonPhotoCard } from '../components/Skeleton.jsx';
 import PhotoItem from '../components/PhotoItem.jsx';
 import { showToast } from '../functions/queueService.js';
-import { NativeSelect, NativeSelectOption } from '../components/ui/native-select.jsx';
+import SortDropdown from '../components/SortDropdown.jsx';
 import {
   getItemId,
   pickTitle,
@@ -879,10 +879,14 @@ export default function PhotoPage({
               <label htmlFor="photo-sort-select" className="sort-label">
                 Sort by
               </label>
-              <NativeSelect
+              <SortDropdown
                 id="photo-sort-select"
-                aria-label="Sort media list"
+                ariaLabel="Sort media list"
                 value={sortKey}
+                options={[
+                  { value: 'date', label: 'Date' },
+                  { value: 'name', label: 'Name' },
+                ]}
                 onChange={(e) => {
                   const val = e.target.value || 'date';
                   setSortKey(val);
@@ -890,10 +894,7 @@ export default function PhotoPage({
                   const label = labels[val] || (val ? val.charAt(0).toUpperCase() + val.slice(1) : 'Date');
                   showToast({ action: 'sort', message: `Sort by: ${label}` });
                 }}
-              >
-                <NativeSelectOption value="date">Date</NativeSelectOption>
-                <NativeSelectOption value="name">Name</NativeSelectOption>
-              </NativeSelect>
+              />
               <button
                 type="button"
                 className="icon-button sort-icon-button"
