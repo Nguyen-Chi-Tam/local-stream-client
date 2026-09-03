@@ -29,7 +29,6 @@ import {
   extractTitleFromPath,
   formatTime,
 } from '../functions/mediaUtils.js';
-import MarqueeText from '../components/MarqueeText.jsx';
 
 
 const STORAGE_KEY = 'localstream_server_url';
@@ -1694,7 +1693,6 @@ export default function MediaPage({
             handleAudioPause={handleAudioPause}
             handlePlayForItem={handlePlayForItem}
             audioRef={audioRef}
-            MarqueeTextComponent={MarqueeText}
           />
         </section>
       </main>

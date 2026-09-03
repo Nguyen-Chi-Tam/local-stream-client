@@ -96,66 +96,6 @@ function LazyImage({ src, alt, onError, className }) {
   );
 }
 
-
-
-const VideoMarqueeText = ({ text, className, onClick, enabled = true }) => {
-  const containerRef = useRef(null);
-  const [isOverflowing, setIsOverflowing] = useState(false);
-
-  useEffect(() => {
-    if (!enabled) {
-      setIsOverflowing(false);
-      return;
-    }
-
-    const checkOverflow = () => {
-      const el = containerRef.current;
-      if (el) {
-        const isMarqueeActive = el.classList.contains('marquee');
-        const scrollW = el.scrollWidth;
-        const clientW = el.clientWidth;
-        const actualTextWidth = isMarqueeActive ? (scrollW - clientW) : scrollW;
-        const overflowing = actualTextWidth > clientW + 2;
-        setIsOverflowing(overflowing);
-      }
-    };
-
-    checkOverflow();
-    const raf = requestAnimationFrame(checkOverflow);
-    const timeout = setTimeout(checkOverflow, 160);
-
-    window.addEventListener('resize', checkOverflow);
-    return () => {
-      cancelAnimationFrame(raf);
-      clearTimeout(timeout);
-      window.removeEventListener('resize', checkOverflow);
-    };
-  }, [text, enabled]);
-
-  const marqueeClass = (enabled && isOverflowing) ? 'marquee' : '';
-
-  if (onClick) {
-    return (
-      <button
-        type="button"
-        ref={containerRef}
-        onClick={onClick}
-        className={`${className} ${marqueeClass}`}
-      >
-        <span className="marquee-inner">{text}</span>
-      </button>
-    );
-  }
-
-  return (
-    <div ref={containerRef} className={`${className} ${marqueeClass}`}>
-      <span className="marquee-inner">{text}</span>
-    </div>
-  );
-};
-
-
-
 function formatTime(seconds) {
   const total = Math.max(0, Math.floor(seconds || 0));
   const hrs = Math.floor(total / 3600);
@@ -2646,7 +2586,6 @@ export default function VideoPage({
             handleVideoEnded={handleVideoEnded}
             keyboardActionHint={keyboardActionHint}
             actionIcons={actionIcons}
-            MarqueeTextComponent={VideoMarqueeText}
             scrollToCurrent={scrollToCurrent}
             currentTime={currentTime}
             scrubPreviewTime={scrubPreviewTime}

@@ -73,7 +73,6 @@ export default function FullscreenVideoPlayer({
   handleVideoEnded,
   keyboardActionHint,
   actionIcons,
-  MarqueeTextComponent,
   scrollToCurrent,
   currentTime,
   scrubPreviewTime,
@@ -108,7 +107,6 @@ export default function FullscreenVideoPlayer({
   isTrueMobileDevice,
   spriteSheet,
 }) {
-  const MarqueeText = MarqueeTextComponent;
   const canMinimize = isTrueMobileDevice;
   const effectiveIsVideoMinimized = isVideoMinimized && canMinimize && !isVideoFullscreenView;
   const shouldShowAmbient = !!selectedVideo;
@@ -1042,22 +1040,13 @@ export default function FullscreenVideoPlayer({
                 <div className="player-main select-none">
                   <div className="player-info select-text">
                     <div id="video-current-title" className="player-title select-text">
-                      {MarqueeText ? (
-                        <MarqueeText
-                          className="player-title-button select-text"
-                          onClick={scrollToCurrent}
-                          text={selectedVideo ? pickTitle(selectedVideo) : ''}
-                          enabled={!isMobileViewport}
-                        />
-                      ) : (
-                        <button
-                          type="button"
-                          className="player-title-button select-text"
-                          onClick={scrollToCurrent}
-                        >
-                          {selectedVideo ? pickTitle(selectedVideo) : ''}
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        className="player-title-button select-text"
+                        onClick={scrollToCurrent}
+                      >
+                        {selectedVideo ? pickTitle(selectedVideo) : ''}
+                      </button>
                     {canMinimize && !isVideoFullscreenView && (
                       <button
                         type="button"
