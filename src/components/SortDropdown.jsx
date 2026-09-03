@@ -4,7 +4,8 @@ import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
-  DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
 } from './ui/dropdown-menu.jsx';
 import { NativeSelect, NativeSelectOption } from './ui/native-select.jsx';
 
@@ -47,22 +48,19 @@ export default function SortDropdown({
           </DropdownMenuTrigger>
           <DropdownMenuContent
             align="end"
-            sideOffset={6}
-            className="sort-dropdown-content"
+            className="min-w-[7.5rem] bg-slate-900/95 backdrop-blur-md border border-slate-700/80 shadow-2xl p-1 rounded-xl z-[99999]"
           >
-            {options.map((opt) => {
-              const isSelected = opt.value === value;
-              return (
-                <DropdownMenuItem
+            <DropdownMenuRadioGroup value={value} onValueChange={handleValueChange}>
+              {options.map((opt) => (
+                <DropdownMenuRadioItem
                   key={opt.value}
-                  className={`sort-dropdown-item${isSelected ? ' selected' : ''}`}
-                  onClick={() => handleValueChange(opt.value)}
+                  value={opt.value}
+                  className="cursor-pointer hover:bg-slate-800/90 gap-2 text-xs py-1.5 px-2.5 rounded-lg focus:bg-slate-800 focus:text-sky-400 transition-colors font-medium text-slate-200 data-[state=checked]:text-sky-400 data-[state=checked]:font-semibold"
                 >
-                  <span className="sort-dropdown-item-label">{opt.label}</span>
-                  {isSelected && <span className="sort-dropdown-dot" aria-hidden="true" />}
-                </DropdownMenuItem>
-              );
-            })}
+                  {opt.label}
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
