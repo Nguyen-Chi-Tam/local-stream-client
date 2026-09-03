@@ -1527,6 +1527,7 @@ input[type='search']::-ms-reveal {
   -webkit-backdrop-filter: blur(4px);
   backdrop-filter: blur(4px);
   transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+  -webkit-user-select: none;
   user-select: none;
   outline: none;
 }
@@ -1625,6 +1626,7 @@ input[type='search']::-ms-reveal {
   cursor: pointer !important;
   outline: none !important;
   border: none !important;
+  -webkit-user-select: none !important;
   user-select: none !important;
   transition: background 0.15s ease, color 0.15s ease !important;
   margin-bottom: 0.15rem;
@@ -1797,6 +1799,7 @@ input[type='search']::-ms-reveal {
   padding: 0.25rem 0;
   width: 20px;
   flex-shrink: 0;
+  -webkit-user-select: none;
   user-select: none;
   position: relative;
 }
