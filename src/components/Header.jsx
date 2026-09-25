@@ -47,6 +47,7 @@ export default function Header({
   const navGlowRef = useRef(null);
   const indicatorRef = useRef(null);
   const itemsRef = useRef([]);
+  const navigationTimerRef = useRef(null);
 
   const activeIdx = Math.max(
     0,
@@ -180,14 +181,14 @@ export default function Header({
     if (!animate) {
       const old = indicator.style.transition;
       indicator.style.transition = 'none';
-      indicator.style.left = `${left}px`;
+      indicator.style.transform = `translate3d(${left}px, 0, 0)`;
       indicator.style.width = `${width}px`;
       // eslint-disable-next-line no-unused-expressions
       indicator.offsetWidth;
       indicator.style.transition = old;
       return;
     }
-    indicator.style.left = `${left}px`;
+    indicator.style.transform = `translate3d(${left}px, 0, 0)`;
     indicator.style.width = `${width}px`;
   }, []);
 
@@ -200,6 +201,21 @@ export default function Header({
     },
     [itemMetrics, setIndicator]
   );
+
+  const navigateAfterIndicatorSlide = useCallback((idx) => {
+    const item = NAV_ITEMS[idx];
+    if (!item || item.id === activeSection) return;
+
+    window.clearTimeout(navigationTimerRef.current);
+    navigationTimerRef.current = window.setTimeout(() => {
+      onNavigate(item.path);
+      navigationTimerRef.current = null;
+    }, 140);
+  }, [activeSection, onNavigate]);
+
+  useEffect(() => () => {
+    window.clearTimeout(navigationTimerRef.current);
+  }, []);
 
   const setGlow = useCallback(
     (clientX, clientY, alpha) => {
@@ -244,21 +260,20 @@ export default function Header({
     };
   }, [activeIdx, isActivePage, snapToIndex]);
 
-  // Initial indicator positioning and Liquid Glass attachment
+  // Position the desktop indicator without attaching the refraction filter.
+  // The filter is costly to repaint while the indicator is moving between tabs.
   useEffect(() => {
     if (!isActivePage) return undefined;
 
     const indicator = indicatorRef.current;
     if (indicator) {
       snapToIndex(activeIdx, false);
-      applyGlass(indicator, DEFAULT_SWITCHER_CONFIG);
     }
     const mobileBtn = mobileMenuBtnRef.current;
     if (mobileBtn) {
       applyGlass(mobileBtn, DEFAULT_SWITCHER_CONFIG);
     }
     return () => {
-      if (indicator) removeGlass(indicator);
       if (mobileBtn) removeGlass(mobileBtn);
     };
   }, [activeIdx, isActivePage, snapToIndex]);
@@ -286,6 +301,7 @@ export default function Header({
     p.pressX = e.clientX;
     p.pressY = e.clientY;
     p.pressWidth = itemMetrics(idx).width;
+    p.ignoreClick = true;
 
     clearTimeout(p.finishTimer);
     const indicator = indicatorRef.current;
@@ -323,7 +339,7 @@ export default function Header({
         let left = localX - w / 2;
         left = Math.min(maxLeft, Math.max(-OVERSHOOT, left));
         if (indicatorRef.current) {
-          indicatorRef.current.style.left = `${left}px`;
+          indicatorRef.current.style.transform = `translate3d(${left}px, 0, 0)`;
           indicatorRef.current.style.width = `${w}px`;
         }
         p.targetIndex = nearestIndex(localX);
@@ -346,9 +362,7 @@ export default function Header({
         indicator.classList.add('sliding');
       }
       snapToIndex(p.targetIndex, true);
-      if (NAV_ITEMS[p.targetIndex] && NAV_ITEMS[p.targetIndex].id !== activeSection) {
-        onNavigate(NAV_ITEMS[p.targetIndex].path);
-      }
+      navigateAfterIndicatorSlide(p.targetIndex);
       p.finishTimer = setTimeout(() => {
         if (indicatorRef.current) {
           indicatorRef.current.classList.remove('interacting', 'sliding');
@@ -378,11 +392,22 @@ export default function Header({
       }, 350);
       p.pointerId = null;
       p.dragMode = false;
+      p.ignoreClick = false;
     };
 
     window.addEventListener('pointermove', onPointerMove);
     window.addEventListener('pointerup', onPointerUp);
     window.addEventListener('pointercancel', onPointerCancel);
+  };
+
+  const handleTabClick = (idx) => {
+    const p = pointerStateRef.current;
+    if (p.ignoreClick) {
+      p.ignoreClick = false;
+      return;
+    }
+    snapToIndex(idx, true);
+    navigateAfterIndicatorSlide(idx);
   };
 
   const handleNavMouseMove = (e) => {
@@ -448,11 +473,9 @@ export default function Header({
     return -1;
   }, []);
 
-  // Liquid Glass attachment for mobile indicator
+  // Keep the mobile indicator lightweight so it can slide without filter repaints.
   useEffect(() => {
     if (!isMenuOpen) return;
-
-    const indicator = mobileIndicatorRef.current;
 
     const activeMobileIdx = MOBILE_MENU_ITEMS.findIndex((it) => it.id === activeSection);
     const initialIdx = activeMobileIdx !== -1 ? activeMobileIdx : 0;
@@ -462,13 +485,8 @@ export default function Header({
       snapMobileIndicator(initialIdx, false);
     }, 16);
 
-    if (indicator) {
-      applyGlass(indicator, DEFAULT_SWITCHER_CONFIG);
-    }
-
     return () => {
       clearTimeout(timeoutId);
-      if (indicator) removeGlass(indicator);
     };
   }, [isMenuOpen, activeSection, snapMobileIndicator]);
 
@@ -543,7 +561,7 @@ export default function Header({
           const item = MOBILE_MENU_ITEMS[currentTargetIdx];
           if (item) {
             if (item.type === 'nav') {
-              handleNavigate(item.path);
+              handleMobileTabNavigate(currentTargetIdx);
             } else if (item.type === 'action') {
               handleChangeServer();
             }
@@ -629,7 +647,7 @@ export default function Header({
         const item = MOBILE_MENU_ITEMS[currentTargetIdx];
         if (item) {
           if (item.type === 'nav') {
-            handleNavigate(item.path);
+              handleMobileTabNavigate(currentTargetIdx);
           } else if (item.type === 'action') {
             handleChangeServer();
           }
@@ -659,6 +677,13 @@ export default function Header({
   const handleItemMouseEnter = (idx) => {
     setMobileHighlightIdx(idx);
     snapMobileIndicator(idx, true);
+  };
+
+  const handleMobileTabNavigate = (idx) => {
+    setMobileHighlightIdx(idx);
+    snapMobileIndicator(idx, true);
+    navigateAfterIndicatorSlide(idx);
+    window.setTimeout(() => setIsMenuOpen(false), 140);
   };
 
   const handleDropdownMouseLeave = () => {
@@ -763,7 +788,7 @@ export default function Header({
                   aria-selected={isActive}
                   style={{ touchAction: 'none' }}
                   onPointerDown={(e) => handlePointerDown(idx, e)}
-                  onClick={() => handleNavigate(item.path)}
+                  onClick={() => handleTabClick(idx)}
                 >
                   {isPlaybackNav ? (
                     <>
@@ -888,7 +913,7 @@ export default function Header({
                     ref={(el) => (mobileItemsRef.current[idx] = el)}
                     className={`menu-item ${isActive ? 'active' : ''} ${isHighlighted ? 'highlighted' : ''}`}
                     type="button"
-                    onClick={() => handleNavigate(item.path)}
+                    onClick={() => handleMobileTabNavigate(idx)}
                     onMouseEnter={() => handleItemMouseEnter(idx)}
                   >
                     <Icon size={18} style={{ flexShrink: 0 }} />
