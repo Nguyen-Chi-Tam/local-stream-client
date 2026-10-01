@@ -23,6 +23,9 @@ import {
   ZoomIn,
   ZoomOut,
 } from 'lucide-react';
+import { MorphIcon } from 'morphicons/react';
+import { Play as MorphPlay, Pause as MorphPause } from 'lucide';
+import AnimatedMediaButton from '../components/AnimatedMediaButton.jsx';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -458,11 +461,6 @@ export default function FullscreenVideoPlayer({
     if (!video) return;
 
     const onPlay = (e) => {
-      const playIcon = document.querySelector('#video-play-pause .icon-play-wrapper');
-      const pauseIcon = document.querySelector('#video-play-pause .icon-pause-wrapper');
-      if (playIcon) playIcon.style.display = 'none';
-      if (pauseIcon) pauseIcon.style.display = 'inline-flex';
-      
       const btn = document.getElementById('video-play-pause');
       if (btn) btn.setAttribute('aria-label', 'Pause');
 
@@ -470,11 +468,6 @@ export default function FullscreenVideoPlayer({
     };
 
     const onPause = (e) => {
-      const playIcon = document.querySelector('#video-play-pause .icon-play-wrapper');
-      const pauseIcon = document.querySelector('#video-play-pause .icon-pause-wrapper');
-      if (playIcon) playIcon.style.display = 'inline-flex';
-      if (pauseIcon) pauseIcon.style.display = 'none';
-
       const btn = document.getElementById('video-play-pause');
       if (btn) btn.setAttribute('aria-label', 'Play');
 
@@ -1006,11 +999,14 @@ export default function FullscreenVideoPlayer({
                   }}
                   aria-label={isPlaying ? 'Pause' : 'Play'}
                 >
-                  {isPlaying ? (
-                    <Pause size={14} fill="currentColor" stroke="none" />
-                  ) : (
-                    <Play size={14} fill="currentColor" stroke="none" />
-                  )}
+                  <MorphIcon
+                    icon={isPlaying ? MorphPause : MorphPlay}
+                    size={14}
+                    fill="currentColor"
+                    stroke="none"
+                    strokeWidth={0}
+                    spring="snappy"
+                  />
                 </button>
               </div>
             </div>
@@ -1328,22 +1324,24 @@ export default function FullscreenVideoPlayer({
                     </DropdownMenu>
                   </div>
                   <div className="player-controls select-none" aria-label="Video playback controls">
-                    <button
+                    <AnimatedMediaButton
+                      direction="left"
                       type="button"
-                      className="icon-button select-none"
+                      className="select-none"
                       aria-label="Previous video"
                       onClick={goToPreviousVideo}
                     >
                       <SkipBack size={18} />
-                    </button>
-                    <button
+                    </AnimatedMediaButton>
+                    <AnimatedMediaButton
+                      direction="left"
                       type="button"
-                      className="icon-button select-none"
+                      className="select-none"
                       aria-label="Rewind 10 seconds"
                       onClick={() => skipVideoRelative(-10)}
                     >
                       <Rewind size={18} />
-                    </button>
+                    </AnimatedMediaButton>
                     <button
                       id="video-play-pause"
                       type="button"
@@ -1351,29 +1349,33 @@ export default function FullscreenVideoPlayer({
                       aria-label={isPlaying ? 'Pause' : 'Play'}
                       onClick={togglePlayPause}
                     >
-                      <span className="icon-pause-wrapper" style={{ display: isPlaying ? 'inline-flex' : 'none' }}>
-                        <Pause size={20} fill="currentColor" stroke="none" />
-                      </span>
-                      <span className="icon-play-wrapper" style={{ display: isPlaying ? 'none' : 'inline-flex' }}>
-                        <Play size={20} fill="currentColor" stroke="none" />
-                      </span>
+                      <MorphIcon
+                        icon={isPlaying ? MorphPause : MorphPlay}
+                        size={20}
+                        fill="currentColor"
+                        stroke="none"
+                        strokeWidth={0}
+                        spring="snappy"
+                      />
                     </button>
-                    <button
+                    <AnimatedMediaButton
+                      direction="right"
                       type="button"
-                      className="icon-button select-none"
+                      className="select-none"
                       aria-label="Fast forward 10 seconds"
                       onClick={() => skipVideoRelative(10)}
                     >
                       <FastForward size={18} />
-                    </button>
-                    <button
+                    </AnimatedMediaButton>
+                    <AnimatedMediaButton
+                      direction="right"
                       type="button"
-                      className="icon-button select-none"
+                      className="select-none"
                       aria-label="Next video"
                       onClick={goToNextVideo}
                     >
                       <SkipForward size={18} />
-                    </button>
+                    </AnimatedMediaButton>
                   </div>
                   <div className="player-side-actions select-none" aria-label="View controls">
                     {isTrueMobileDevice && isVideoFullscreenView && (

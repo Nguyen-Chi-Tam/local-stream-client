@@ -1,5 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { AudioLines, Play, Pause, Rewind, FastForward, SkipBack, SkipForward, Delete } from 'lucide-react';
+import { AudioLines, Play, Pause, Rewind, FastForward, SkipBack, SkipForward, Delete, ArrowUp } from 'lucide-react';
+import { MorphIcon } from 'morphicons/react';
+import { Play as MorphPlay, Pause as MorphPause } from 'lucide';
+import AnimatedMediaButton from './AnimatedMediaButton.jsx';
 import { fetchMediaItemsCached, getMediaEndpoint } from '../functions/mediaApiCache.js';
 import SortDropdown from './SortDropdown.jsx';
 import MediaItem from './MediaItem.jsx';
@@ -451,7 +454,9 @@ export default function VisualMediaPage({
                   });
                 }}
               >
-                ⇅
+                <span className={`sort-reverse-icon ${isSortReversed ? 'reversed' : ''}`}>
+                  <ArrowUp size={16} />
+                </span>
               </button>
             </div>
           </div>
@@ -526,44 +531,47 @@ export default function VisualMediaPage({
                           aria-label={isSelectedVideoPlaying ? 'Pause video' : 'Play video'}
                           onClick={toggleSelectedVideoPlayback}
                         >
-                          {isSelectedVideoPlaying ? (
-                            <Pause size={18} fill="currentColor" stroke="none" />
-                          ) : (
-                            <Play size={18} fill="currentColor" stroke="none" />
-                          )}
+                          <MorphIcon
+                            icon={isSelectedVideoPlaying ? MorphPause : MorphPlay}
+                            size={18}
+                            fill="currentColor"
+                            stroke="none"
+                            strokeWidth={0}
+                            spring="snappy"
+                          />
                         </button>
-                        <button
+                        <AnimatedMediaButton
+                          direction="left"
                           type="button"
-                          className="icon-button"
                           aria-label="Previous video"
                           onClick={goToPreviousVideo}
                         >
                           <SkipBack size={18} />
-                        </button>
-                        <button
+                        </AnimatedMediaButton>
+                        <AnimatedMediaButton
+                          direction="left"
                           type="button"
-                          className="icon-button"
                           aria-label="Rewind 10 seconds"
                           onClick={() => skipVideoRelative(-10)}
                         >
                           <Rewind size={18} />
-                        </button>
-                        <button
+                        </AnimatedMediaButton>
+                        <AnimatedMediaButton
+                          direction="right"
                           type="button"
-                          className="icon-button"
                           aria-label="Fast forward 10 seconds"
                           onClick={() => skipVideoRelative(10)}
                         >
                           <FastForward size={18} />
-                        </button>
-                        <button
+                        </AnimatedMediaButton>
+                        <AnimatedMediaButton
+                          direction="right"
                           type="button"
-                          className="icon-button"
                           aria-label="Next video"
                           onClick={goToNextVideo}
                         >
                           <SkipForward size={18} />
-                        </button>
+                        </AnimatedMediaButton>
                       </div>
                     </div>
                   </>

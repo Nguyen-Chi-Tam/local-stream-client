@@ -284,10 +284,14 @@ label {
   align-items: center;
   justify-content: center;
   box-shadow: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
 }
 
 .label-nav-button:hover:not(:disabled) {
   background: #111827;
+  border-color: rgba(56, 189, 248, 0.4);
+  color: #38bdf8;
   transform: none;
   box-shadow: none;
 }
@@ -1748,6 +1752,31 @@ input[type='search']::-ms-reveal {
   color: #fff;
   box-shadow: none;
   transform: none;
+}
+
+.sort-reverse-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  transform-origin: center center;
+  transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+  transform: rotate(0deg);
+  will-change: transform;
+}
+
+.sort-reverse-icon.reversed {
+  transform: rotate(180deg);
+}
+
+.refresh-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transform-origin: center center;
+  transition: transform 0.65s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
 }
 
 .music-list {
@@ -3298,6 +3327,13 @@ input[type='search']::-ms-reveal {
   color: #022c22;
 }
 
+.player-controls .play-main svg,
+.mini-play-pause svg,
+.play-main svg {
+  fill: currentColor;
+  stroke: none;
+}
+
 .player-controls .icon-button.play-main:hover {
   background: #16a34a;
   box-shadow: 0 10px 20px rgba(22, 163, 74, 0.4);
@@ -3313,15 +3349,124 @@ input[type='search']::-ms-reveal {
   transform: translateY(-1px);
 }
 
+.player-controls .icon-button#repeat-toggle,
+.player-controls .icon-button#shuffle-toggle {
+  transition: color 0.4s cubic-bezier(0.22, 1, 0.36, 1), transform 0.2s ease;
+}
+
+.player-controls .icon-button#repeat-toggle svg,
+.player-controls .icon-button#shuffle-toggle svg {
+  transition: color 0.4s cubic-bezier(0.22, 1, 0.36, 1), stroke 0.4s cubic-bezier(0.22, 1, 0.36, 1), stroke-width 0.3s ease, filter 0.4s cubic-bezier(0.22, 1, 0.36, 1), transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
 .player-controls .icon-button.toggle-active,
 .player-left-actions .icon-button.toggle-active,
 .player-side-actions .icon-button.toggle-active {
   background: transparent;
-  color: #38bdf8;
+  color: #38bdf8 !important;
 }
 
 .player-controls .icon-button.toggle-active svg {
-  stroke-width: 3px;
+  stroke: #38bdf8;
+  stroke-width: 2.5px;
+  filter: drop-shadow(0 0 6px rgba(56, 189, 248, 0.55));
+  animation: toggleFadeCyan 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes toggleFadeCyan {
+  0% {
+    color: #ffffff;
+    stroke: #ffffff;
+    filter: drop-shadow(0 0 0px transparent);
+    transform: scale(0.92);
+  }
+  50% {
+    color: #67e8f9;
+    stroke: #67e8f9;
+    filter: drop-shadow(0 0 10px rgba(56, 189, 248, 0.75));
+    transform: scale(1.08);
+  }
+  100% {
+    color: #38bdf8;
+    stroke: #38bdf8;
+    filter: drop-shadow(0 0 6px rgba(56, 189, 248, 0.55));
+    transform: scale(1);
+  }
+}
+
+/* --- Media Button Directional Fade Animations (tailwindcss-animated) --- */
+.media-icon-wrapper {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+
+@keyframes fade-left {
+  0% {
+    opacity: 0.05;
+    transform: translate(1.2rem, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(0, 0);
+  }
+}
+
+@keyframes fade-right {
+  0% {
+    opacity: 0.05;
+    transform: translate(-1.2rem, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(0, 0);
+  }
+}
+
+.animate-fade-left {
+  animation: fade-left 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.animate-fade-right {
+  animation: fade-right 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Directional micro-interactions on hover and active: smooth & fluid */
+.player-controls .media-btn-left:hover .media-icon-wrapper {
+  transform: translateX(-2px);
+  transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.player-controls .media-btn-left:active .media-icon-wrapper {
+  transform: translateX(-4px) scale(0.94);
+  transition: transform 0.12s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.player-controls .media-btn-right:hover .media-icon-wrapper {
+  transform: translateX(2px);
+  transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.player-controls .media-btn-right:active .media-icon-wrapper {
+  transform: translateX(4px) scale(0.94);
+  transition: transform 0.12s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-left,
+  .animate-fade-right,
+  .player-controls .icon-button.toggle-active svg,
+  .player-controls .media-btn-left:hover .media-icon-wrapper,
+  .player-controls .media-btn-left:active .media-icon-wrapper,
+  .player-controls .media-btn-right:hover .media-icon-wrapper,
+  .player-controls .media-btn-right:active .media-icon-wrapper {
+    animation: none !important;
+    transform: none !important;
+    transition: none !important;
+  }
 }
 
 /* Music player layout: left art column + right content column */
@@ -5543,17 +5688,14 @@ button.mini-title:focus {
 .quick-connect {
   margin-top: 1.5rem;
   margin-bottom: 0;
-
-
   padding: 1.1rem 0;
   display: flex;
   align-items: center;
-  gap: 1.25rem;
+  gap: 0.75rem;
   border-top: 1px solid rgba(255, 255, 255, 0.05);
   animation: alertIn 0.8s ease-out;
+  min-width: 0;
 }
-
-
 
 .quick-connect-label {
   font-size: 0.7rem;
@@ -5562,6 +5704,35 @@ button.mini-title:focus {
   text-transform: uppercase;
   letter-spacing: 0.15em;
   white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.quick-connect-nav-btn {
+  border: 1px solid #1f2937;
+  background: #0f172a;
+  color: #e5e7eb;
+  border-radius: 0.6rem;
+  padding: 0.25rem 0.45rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.quick-connect-nav-btn:hover:not(:disabled) {
+  background: #111827;
+  border-color: rgba(56, 189, 248, 0.4);
+  color: #38bdf8;
+  transform: none;
+  box-shadow: none;
+}
+
+.quick-connect-nav-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
 }
 
 .quick-connect-list {
@@ -5571,6 +5742,9 @@ button.mini-title:focus {
   overscroll-behavior-x: none;
   scrollbar-width: none;
   padding: 0.5rem 0;
+  scroll-behavior: smooth;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 

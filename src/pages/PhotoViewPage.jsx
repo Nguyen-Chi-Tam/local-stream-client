@@ -82,6 +82,7 @@ export default function PhotoViewPage({
   const [zoomLevel, setZoomLevel] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
+  const [refreshRotation, setRefreshRotation] = useState(0);
 
   const overlayRef = useRef(null);
   const imageRef = useRef(null);
@@ -653,6 +654,7 @@ export default function PhotoViewPage({
             }}
             onClick={(e) => {
               e.stopPropagation();
+              setRefreshRotation((prev) => prev + 360);
               setZoomLevel(1);
               setPan({ x: 0, y: 0 });
               dragStateRef.current.panX = 0;
@@ -660,7 +662,12 @@ export default function PhotoViewPage({
             }}
             aria-label="Reset zoom"
           >
-            <RefreshCw size={18} strokeWidth={2.75} color="white" style={{ opacity: 0.9 }} />
+            <span
+              className="refresh-icon"
+              style={{ transform: `rotate(${refreshRotation}deg)` }}
+            >
+              <RefreshCw size={18} strokeWidth={2.75} color="white" style={{ opacity: 0.9 }} />
+            </span>
           </button>
 
           <button

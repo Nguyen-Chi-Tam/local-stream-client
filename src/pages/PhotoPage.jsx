@@ -230,6 +230,7 @@ export default function PhotoPage({
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
   const [sortKey, setSortKey] = useState(() => loadSettings().sortKey ?? 'date');
   const [isSortReversed, setIsSortReversed] = useState(() => loadSettings().isSortReversed ?? false);
+  const [refreshRotation, setRefreshRotation] = useState(0);
   const [groupByFolder, setGroupByFolder] = useState(() => loadSettings().groupByFolder ?? true);
   const [hiddenFolders, setHiddenFolders] = useState(() => loadSettings().hiddenFolders ?? []);
   // Persist settings whenever they change
@@ -910,11 +911,9 @@ export default function PhotoPage({
                   });
                 }}
               >
-                {isSortReversed ? (
-                  <ArrowDown size={16} />
-                ) : (
+                <span className={`sort-reverse-icon ${isSortReversed ? 'reversed' : ''}`}>
                   <ArrowUp size={16} />
-                )}
+                </span>
               </button>
               <button
                 type="button"
@@ -940,9 +939,17 @@ export default function PhotoPage({
                 className="icon-button sort-icon-button"
                 aria-label="Reload media"
                 title="Reload media"
-                onClick={handleReload}
+                onClick={() => {
+                  setRefreshRotation((prev) => prev + 360);
+                  handleReload();
+                }}
               >
-                <RefreshCw size={16} />
+                <span
+                  className="refresh-icon"
+                  style={{ transform: `rotate(${refreshRotation}deg)` }}
+                >
+                  <RefreshCw size={16} />
+                </span>
               </button>
               <button
                 type="button"

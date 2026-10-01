@@ -1,5 +1,5 @@
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { createLucideIcon, Mail, X, Play, Pause, SkipBack, SkipForward, Rewind, FastForward, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react';
 
 // Brand icons removed in lucide-react 1.0+ - provided here as local SVGs
@@ -97,12 +97,40 @@ export default function ConnectPage({ onConnected }) {
   const [recentServers, setRecentServers] = useState(() => {
     try {
       const stored = window.localStorage.getItem(RECENT_SERVERS_KEY);
-      return stored ? JSON.parse(stored) : [];
+      if (!stored) return [];
+      const parsed = JSON.parse(stored);
+      return Array.isArray(parsed) ? parsed.slice(0, 10) : [];
     } catch {
       return [];
     }
   });
   const [error, setError] = useState('');
+
+  const quickConnectListRef = useRef(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  const checkQuickConnectScroll = useCallback(() => {
+    const el = quickConnectListRef.current;
+    if (!el) return;
+    const { scrollLeft, scrollWidth, clientWidth } = el;
+    setCanScrollLeft(scrollLeft > 2);
+    setCanScrollRight(scrollLeft + clientWidth < scrollWidth - 2);
+  }, []);
+
+  useEffect(() => {
+    checkQuickConnectScroll();
+    window.addEventListener('resize', checkQuickConnectScroll);
+    return () => window.removeEventListener('resize', checkQuickConnectScroll);
+  }, [recentServers, checkQuickConnectScroll]);
+
+  const scrollQuickConnect = (direction) => {
+    const el = quickConnectListRef.current;
+    if (!el) return;
+    const scrollAmount = direction === 'left' ? -250 : 250;
+    el.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+    setTimeout(checkQuickConnectScroll, 320);
+  };
 
   const hasDigits = /\d/.test(value);
 
@@ -215,7 +243,7 @@ export default function ConnectPage({ onConnected }) {
     try {
       window.localStorage.setItem(STORAGE_KEY, url);
 
-      const updatedRecent = [url, ...recentServers.filter(s => s !== url)].slice(0, 5);
+      const updatedRecent = [url, ...recentServers.filter(s => s !== url)].slice(0, 10);
 
       window.localStorage.setItem(RECENT_SERVERS_KEY, JSON.stringify(updatedRecent));
       setRecentServers(updatedRecent);
@@ -358,7 +386,21 @@ export default function ConnectPage({ onConnected }) {
         {recentServers.length > 0 && (
           <div className="quick-connect">
             <span className="quick-connect-label">Quick Connect:</span>
-            <div className="quick-connect-list">
+            <button
+              type="button"
+              className="quick-connect-nav-btn"
+              onClick={() => scrollQuickConnect('left')}
+              disabled={!canScrollLeft}
+              aria-label="Scroll quick connect left"
+              title="Scroll left"
+            >
+              <ChevronLeft size={14} />
+            </button>
+            <div
+              className="quick-connect-list"
+              ref={quickConnectListRef}
+              onScroll={checkQuickConnectScroll}
+            >
               {recentServers.map((url) => (
                 <div key={url} className="quick-connect-item-wrapper">
                   <button
@@ -377,8 +419,17 @@ export default function ConnectPage({ onConnected }) {
                   </button>
                 </div>
               ))}
-
             </div>
+            <button
+              type="button"
+              className="quick-connect-nav-btn"
+              onClick={() => scrollQuickConnect('right')}
+              disabled={!canScrollRight}
+              aria-label="Scroll quick connect right"
+              title="Scroll right"
+            >
+              <ChevronRight size={14} />
+            </button>
           </div>
         )}
 

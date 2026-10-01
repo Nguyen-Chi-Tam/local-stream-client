@@ -1,5 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Shuffle, Repeat, SkipBack, SkipForward, Play, Pause, Rewind, FastForward, ZoomIn, ZoomOut } from 'lucide-react';
+import { MorphIcon } from 'morphicons/react';
+import { Play as MorphPlay, Pause as MorphPause } from 'lucide';
+import AnimatedMediaButton from '../components/AnimatedMediaButton.jsx';
 import { dequeueNext, showToast } from '../functions/queueService.js';
 
 export default function FullscreenMusicPlayer({
@@ -445,24 +448,26 @@ export default function FullscreenMusicPlayer({
             >
               <Repeat size={18} />
             </button>
-            <button
+            <AnimatedMediaButton
+              direction="left"
               id="prev-track"
               type="button"
-              className="icon-button select-none"
+              className="select-none"
               aria-label="Previous track"
               onClick={playPreviousTrack}
             >
               <SkipBack size={18} />
-            </button>
-            <button
+            </AnimatedMediaButton>
+            <AnimatedMediaButton
+              direction="left"
               id="rewind-10"
               type="button"
-              className="icon-button select-none"
+              className="select-none"
               aria-label="Rewind 10 seconds"
               onClick={() => skipRelative(-10)}
             >
               <Rewind size={18} />
-            </button>
+            </AnimatedMediaButton>
             <button
               id="play-pause"
               type="button"
@@ -471,31 +476,36 @@ export default function FullscreenMusicPlayer({
               aria-pressed={isPlaying ? 'true' : 'false'}
               onClick={togglePlayPause}
             >
-              {isPlaying ? (
-                <Pause size={20} fill="currentColor" stroke="none" />
-              ) : (
-                <Play size={20} fill="currentColor" stroke="none" />
-              )}
+              <MorphIcon
+                icon={isPlaying ? MorphPause : MorphPlay}
+                size={20}
+                fill="currentColor"
+                stroke="none"
+                strokeWidth={0}
+                spring="snappy"
+              />
             </button>
 
-            <button
+            <AnimatedMediaButton
+              direction="right"
               id="forward-10"
               type="button"
-              className="icon-button select-none"
+              className="select-none"
               aria-label="Fast forward 10 seconds"
               onClick={() => skipRelative(10)}
             >
               <FastForward size={18} />
-            </button>
-            <button
+            </AnimatedMediaButton>
+            <AnimatedMediaButton
+              direction="right"
               id="next-track"
               type="button"
-              className="icon-button select-none"
+              className="select-none"
               aria-label="Next track"
               onClick={playNextTrack}
             >
               <SkipForward size={18} />
-            </button>
+            </AnimatedMediaButton>
             <button
               id="shuffle-toggle"
               type="button"
