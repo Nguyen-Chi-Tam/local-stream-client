@@ -1515,8 +1515,19 @@
     }
 
     .music-page.has-playing:not(.music-player-active) #player .player-controls .icon-button.play-main {
-        width: 3.5rem !important;
-        height: 3.5rem !important;
+        width: 4rem !important;
+        height: 4rem !important;
+    }
+
+    .music-page.has-playing:not(.music-player-active) #player .player-controls .play-main svg {
+        width: 1.9rem !important;
+        height: 1.9rem !important;
+    }
+
+    .music-page.has-playing:not(.music-player-active) #player .player-controls .icon-button:not(.play-main) svg,
+    .music-page.has-playing:not(.music-player-active) #player .player-controls .media-icon-wrapper svg {
+        width: 1.33rem !important;
+        height: 1.33rem !important;
     }
 
     /* Maintain column layout and animate list/toolbar during transition */

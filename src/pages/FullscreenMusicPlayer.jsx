@@ -446,7 +446,7 @@ export default function FullscreenMusicPlayer({
                 });
               }}
             >
-              <Repeat size={18} />
+              <Repeat size={28} />
             </button>
             <AnimatedMediaButton
               direction="left"
@@ -456,7 +456,7 @@ export default function FullscreenMusicPlayer({
               aria-label="Previous track"
               onClick={playPreviousTrack}
             >
-              <SkipBack size={18} />
+              <SkipBack size={28} />
             </AnimatedMediaButton>
             <AnimatedMediaButton
               direction="left"
@@ -466,7 +466,7 @@ export default function FullscreenMusicPlayer({
               aria-label="Rewind 10 seconds"
               onClick={() => skipRelative(-10)}
             >
-              <Rewind size={18} />
+              <Rewind size={28} />
             </AnimatedMediaButton>
             <button
               id="play-pause"
@@ -494,7 +494,7 @@ export default function FullscreenMusicPlayer({
               aria-label="Fast forward 10 seconds"
               onClick={() => skipRelative(10)}
             >
-              <FastForward size={18} />
+              <FastForward size={28} />
             </AnimatedMediaButton>
             <AnimatedMediaButton
               direction="right"
@@ -504,7 +504,7 @@ export default function FullscreenMusicPlayer({
               aria-label="Next track"
               onClick={playNextTrack}
             >
-              <SkipForward size={18} />
+              <SkipForward size={28} />
             </AnimatedMediaButton>
             <button
               id="shuffle-toggle"
@@ -521,7 +521,7 @@ export default function FullscreenMusicPlayer({
                 });
               }}
             >
-              <Shuffle size={18} />
+              <Shuffle size={28} />
             </button>
           </div>
         </div>
