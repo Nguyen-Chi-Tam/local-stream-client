@@ -1,7 +1,7 @@
 {
   "homepage": "http://lsclient.qzz.io",
   "name": "local-stream-client",
-  "version": "2.0.9",
+  "version": "2.1.0",
   "private": true,
   "main": "electron/main.js",
   "scripts": {
@@ -29,6 +29,7 @@
     "lucide-react": "^1.16.0",
     "mammoth": "^1.12.1",
     "morphicons": "^1.7.1",
+    "qr-scanner": "^1.4.2",
     "radix-ui": "^1.6.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",

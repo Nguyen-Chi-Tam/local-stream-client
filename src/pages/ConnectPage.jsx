@@ -1,6 +1,7 @@
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { createLucideIcon, Mail, X, Play, Pause, SkipBack, SkipForward, Rewind, FastForward, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react';
+import { createLucideIcon, Mail, X, Play, Pause, SkipBack, SkipForward, Rewind, FastForward, RotateCcw, ChevronLeft, ChevronRight, QrCode } from 'lucide-react';
+import QrScannerModal from '../components/QrScannerModal.jsx';
 
 // Brand icons removed in lucide-react 1.0+ - provided here as local SVGs
 const Youtube = createLucideIcon('Youtube', [
@@ -73,6 +74,37 @@ function normalizeUrl(raw) {
     return 'http://' + trimmed;
   }
   return trimmed.replace(/\/$/, '');
+}
+
+function extractServerUrl(raw) {
+  if (!raw || typeof raw !== 'string') return '';
+  const trimmed = raw.trim();
+
+  // Try parsing JSON in case LocalStream encodes structured data
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (typeof parsed === 'object' && parsed !== null) {
+      const candidate = parsed.url || parsed.server || parsed.serverUrl || parsed.address || parsed.host;
+      if (candidate) {
+        const fromJson = extractServerUrl(candidate);
+        if (fromJson) return fromJson;
+      }
+    }
+  } catch {}
+
+  // Look for http://<ip_or_localhost>:<port> pattern
+  const httpMatch = trimmed.match(/https?:\/\/(?:(?:\d{1,3}\.){3}\d{1,3}|localhost):\d{1,5}/i);
+  if (httpMatch) {
+    return httpMatch[0].replace(/\/$/, '');
+  }
+
+  // Look for <ip_or_localhost>:<port> without scheme
+  const ipPortMatch = trimmed.match(/(?:(?:\d{1,3}\.){3}\d{1,3}|localhost):\d{1,5}/i);
+  if (ipPortMatch) {
+    return 'http://' + ipPortMatch[0];
+  }
+
+  return normalizeUrl(trimmed);
 }
 
 export default function ConnectPage({ onConnected }) {
@@ -255,6 +287,36 @@ export default function ConnectPage({ onConnected }) {
     onConnected(url);
   }
 
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
+
+  const handleQrScan = useCallback((scannedText) => {
+    setIsScannerOpen(false);
+    setError('');
+
+    const extracted = extractServerUrl(scannedText);
+    setValue(extracted);
+
+    // Strict URL check
+    const ipPortRegex = /^http:\/\/(?:(?:\d{1,3}\.){3}\d{1,3}|localhost):\d{1,5}$/;
+    if (ipPortRegex.test(extracted)) {
+      try {
+        window.localStorage.setItem(STORAGE_KEY, extracted);
+        setRecentServers((prev) => {
+          const updated = [extracted, ...prev.filter((s) => s !== extracted)].slice(0, 10);
+          try {
+            window.localStorage.setItem(RECENT_SERVERS_KEY, JSON.stringify(updated));
+          } catch {}
+          return updated;
+        });
+      } catch {
+        // ignore
+      }
+      onConnected(extracted);
+    } else {
+      setError(`Scanned address "${extracted}" does not match the expected http://<ip>:<port> format.`);
+    }
+  }, [onConnected]);
+
   return (
     <main className="page page-connect">
       <section className="connect-card connect-shell">
@@ -295,7 +357,7 @@ export default function ConnectPage({ onConnected }) {
             <div className="connect-panel">
               <h2>Connect to your server</h2>
               <p className="connect-panel-subtitle">
-                Paste the <strong>Main Server URL</strong> from the LocalStream app.
+                Paste the <strong>Main Server URL</strong> or scan the QR code from the app.
               </p>
 
               <form id="server-form" className="form" onSubmit={handleSubmit}>
@@ -359,7 +421,17 @@ export default function ConnectPage({ onConnected }) {
                   >
                     <X size={16} />
                   </button>
+                  <button
+                    type="button"
+                    className="server-qr-button"
+                    onClick={() => setIsScannerOpen(true)}
+                    aria-label="Scan QR Code"
+                    title="Scan QR Code with camera"
+                  >
+                    <QrCode size={16} />
+                  </button>
                 </div>
+
                 <p className="hint">
                   This value never leaves your device — it&apos;s stored in your browser only.
                 </p>
@@ -446,15 +518,15 @@ export default function ConnectPage({ onConnected }) {
           <div className="connect-step">
             <div className="connect-step-number">2</div>
             <div className="connect-step-body">
-              <div className="connect-step-title">Copy the Main Server URL</div>
-              <div className="connect-step-text">In the app, copy the URL shown under &ldquo;Main server&rdquo;.</div>
+              <div className="connect-step-title">Tap QR code or copy URL</div>
+              <div className="connect-step-text">In the app, tap &ldquo;QR code&rdquo; under Server Access or copy the URL.</div>
             </div>
           </div>
           <div className="connect-step">
             <div className="connect-step-number">3</div>
             <div className="connect-step-body">
-              <div className="connect-step-title">Paste and connect</div>
-              <div className="connect-step-text">Paste it above and start exploring your library in the browser.</div>
+              <div className="connect-step-title">Scan or paste to connect</div>
+              <div className="connect-step-text">Scan the QR code with your camera or paste the address to start streaming.</div>
             </div>
           </div>
         </div>
@@ -471,7 +543,7 @@ export default function ConnectPage({ onConnected }) {
                 Download LocalStream for Android
               </a>
               <a
-                href="https://github.com/Nguyen-Chi-Tam/local-stream-client/releases/download/download/Local.Stream.Client.Setup.2.0.9.exe"
+                href="https://github.com/Nguyen-Chi-Tam/local-stream-client/releases/download/download/Local.Stream.Client.Setup.2.1.0.exe"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="connect-desktop-link"
@@ -681,6 +753,12 @@ export default function ConnectPage({ onConnected }) {
         </div>
 
       </footer>
+
+      <QrScannerModal
+        isOpen={isScannerOpen}
+        onClose={() => setIsScannerOpen(false)}
+        onScan={handleQrScan}
+      />
     </main>
   );
 }

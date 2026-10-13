@@ -14,6 +14,7 @@ import {
   Scaling,
   Trash2,
   X,
+  Mic2,
 } from 'lucide-react';
 import { subscribeQueueToast } from '../functions/queueService.js';
 import { pickTitle } from '../functions/mediaUtils.js';
@@ -38,6 +39,7 @@ export default function QueueToast() {
 
   useEffect(() => {
     const unsubscribe = subscribeQueueToast((data) => {
+      if (document.querySelector('.music-player-active')) return;
       if (timerRef.current) clearTimeout(timerRef.current);
       if (exitTimerRef.current) clearTimeout(exitTimerRef.current);
 
@@ -134,6 +136,7 @@ export default function QueueToast() {
     if (action === 'group_folder') return toast.groupByFolder ? <FolderCheck size={16} /> : <FolderX size={16} />;
     if (action === 'repeat' || action === 'loop') return <Repeat size={16} />;
     if (action === 'shuffle') return <Shuffle size={16} />;
+    if (action === 'lyrics') return <Mic2 size={16} />;
     if (action === 'speed') return <Gauge size={16} />;
     if (action === 'scaling') return <Scaling size={16} />;
     return <ListPlus size={16} />;
@@ -143,7 +146,7 @@ export default function QueueToast() {
     if (action === 'remove' || action === 'clear') return 'queue-toast-icon-remove';
     if (action === 'sort' || action === 'sort_order') return 'queue-toast-icon-sort';
     if (action === 'group_folder') return 'queue-toast-icon-folder';
-    if (action === 'repeat' || action === 'loop' || action === 'shuffle' || action === 'speed' || action === 'scaling') return 'queue-toast-icon-player';
+    if (action === 'repeat' || action === 'loop' || action === 'shuffle' || action === 'lyrics' || action === 'speed' || action === 'scaling') return 'queue-toast-icon-player';
     return 'queue-toast-icon-add';
   };
 

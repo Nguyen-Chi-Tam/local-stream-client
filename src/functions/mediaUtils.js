@@ -1,3 +1,5 @@
+import defaultArt from '/default-art.png';
+
 // Returns the canonical photo source URL for an item
 export function pickPhotoSourceUrl(serverUrl, item) {
   const id = getItemId(item);
@@ -420,7 +422,7 @@ export function pickRelativeOrAbsoluteUrl(serverUrl, raw) {
 }
 
 export function pickThumbnailUrl(serverUrl, item, mediaTypeHint) {
-  if (!item) return '/default-art.png';
+  if (!item) return defaultArt;
 
   const rawArt =
     item.albumArt ||
@@ -439,7 +441,7 @@ export function pickThumbnailUrl(serverUrl, item, mediaTypeHint) {
   const strArt = String(rawArt || '').trim();
 
   if (strArt === '/thumbnail/album/3579481289389474209') {
-    return '/default-art.png';
+    return defaultArt;
   }
 
   if (strArt) {
@@ -449,14 +451,14 @@ export function pickThumbnailUrl(serverUrl, item, mediaTypeHint) {
   const type = mediaTypeHint || getMediaType(item);
 
   if (type === 'AUDIO') {
-    return '/default-art.png';
+    return defaultArt;
   }
 
   const id = getItemId(item);
-  if (id == null) return '/default-art.png';
+  if (id == null) return defaultArt;
 
   const base = (serverUrl || '').replace(/\/$/, '');
-  if (!base) return '/default-art.png';
+  if (!base) return defaultArt;
 
   let mediaTypePath = 'video';
   if (type === 'IMAGE') mediaTypePath = 'image';

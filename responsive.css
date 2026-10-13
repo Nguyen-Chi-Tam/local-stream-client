@@ -594,14 +594,26 @@
         padding: 0.8rem 0.6rem !important;
     }
 
+    .player-info-text-group {
+        min-width: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        overflow: hidden !important;
+    }
+
     .player-title,
     .player-title-button {
         font-size: 0.85rem;
-        overflow: hidden;
-        white-space: nowrap;
-        text-overflow: ellipsis;
-        display: block;
-        width: 100%;
+        overflow: hidden !important;
+        white-space: nowrap !important;
+        text-overflow: ellipsis !important;
+        display: block !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        -webkit-line-clamp: unset !important;
+        line-clamp: unset !important;
+        -webkit-box-orient: horizontal !important;
     }
 
     .player-artist {
@@ -682,7 +694,7 @@
         margin-top: 0;
     }
 
-    .music-player-active #player .player-content {
+    .music-player-active #player:not(.has-lyrics-open) .player-content {
         display: grid;
         grid-template-columns: minmax(0, 1fr);
         grid-template-rows: minmax(0, 1fr) auto auto auto;
@@ -693,11 +705,11 @@
         text-align: center;
     }
 
-    .music-player-active #player .player-main {
+    .music-player-active #player:not(.has-lyrics-open) .player-main {
         display: contents;
     }
 
-    .music-player-active #player .player-art {
+    .music-player-active #player:not(.has-lyrics-open) .player-art {
         grid-column: 1;
         grid-row: 1;
         align-self: center;
@@ -752,25 +764,31 @@
         box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3);
     }
 
-    .music-player-active #player .player-info,
-    .music-player-active #player .player-timeline,
-    .music-player-active #player .player-controls {
+    .music-player-active #player:not(.has-lyrics-open) .player-info,
+    .music-player-active #player:not(.has-lyrics-open) .player-timeline,
+    .music-player-active #player:not(.has-lyrics-open) .player-controls {
         grid-column: 1;
     }
 
-    .music-player-active #player .player-info {
+    .music-player-active #player:not(.has-lyrics-open) .player-info {
         grid-row: 2;
         align-items: flex-start;
         text-align: left;
         width: 100%;
     }
 
-    .music-player-active #player .player-title-button {
-        display: block;
+    .music-player-active #player:not(.has-lyrics-open) .player-title-button {
+        display: -webkit-box !important;
+        -webkit-line-clamp: 3 !important;
+        line-clamp: 3 !important;
+        -webkit-box-orient: vertical !important;
         width: 100%;
         text-align: left;
         border-radius: 0 !important;
         padding-right: 5px;
+        white-space: normal !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
     }
 
     @media (max-width: 385px),
@@ -786,7 +804,7 @@
         }
     }
 
-    .music-player-active #player .player-timeline {
+    .music-player-active #player:not(.has-lyrics-open) .player-timeline {
         grid-row: 3;
     }
 
@@ -796,6 +814,8 @@
         justify-content: space-evenly;
         gap: 0.2rem;
         padding: 0.45rem;
+        --play-btn-size: 2.8875rem;
+        --media-icon-size: calc(var(--play-btn-size) * 0.4);
     }
 
     .music-player-active #player .player-controls .icon-button {
@@ -805,9 +825,19 @@
     }
 
     .music-player-active #player .player-controls .icon-button.play-main {
-        width: 2.75rem;
-        height: 2.75rem;
+        width: var(--play-btn-size) !important;
+        height: var(--play-btn-size) !important;
         padding: 0;
+    }
+
+    .music-page:not(.music-player-active) #player:not(.column-player) .player-controls .icon-button.play-main {
+        padding-inline: 1.045rem !important;
+        padding-block: 0.5225rem !important;
+    }
+
+    .music-page:not(.music-player-active) #player:not(.column-player) .player-controls .icon-button.play-main svg {
+        width: 19px !important;
+        height: 19px !important;
     }
 
     @media (max-height: 700px) {
@@ -858,7 +888,7 @@
 
 /* Portrait or Square Aspect Ratio Layouts (e.g., 50% split-screen) */
 @media (max-aspect-ratio: 1.2/1) {
-    .music-player-active #player .player-art {
+    .music-player-active #player:not(.has-lyrics-open) .player-art {
         width: min(80vw, calc(100dvh - 270px), 480px) !important;
         height: auto !important;
         aspect-ratio: 1 / 1 !important;
@@ -867,7 +897,7 @@
 
 /* Fullscreen Music Player: Landscape layout optimization */
 @media (orientation: landscape) and (min-aspect-ratio: 1.2/1) {
-    .music-player-active #player .player-content {
+    .music-player-active #player:not(.has-lyrics-open) .player-content {
         display: grid;
         grid-template-columns: 1fr 1.3fr;
         grid-template-rows: 1fr auto auto auto 1fr;
@@ -880,7 +910,7 @@
         width: 100%;
     }
 
-    .music-player-active #player .player-art {
+    .music-player-active #player:not(.has-lyrics-open) .player-art {
         grid-column: 1 !important;
         grid-row: 1 / -1 !important;
         justify-self: center !important;
@@ -890,7 +920,7 @@
         aspect-ratio: 1 / 1 !important;
     }
 
-    .music-player-active #player .player-info {
+    .music-player-active #player:not(.has-lyrics-open) .player-info {
         grid-column: 2 !important;
         grid-row: 2 !important;
         align-items: flex-start !important;
@@ -900,19 +930,19 @@
         width: 100% !important;
     }
 
-    .music-player-active #player .player-title-button {
+    .music-player-active #player:not(.has-lyrics-open) .player-title-button {
         text-align: left !important;
         justify-content: flex-start !important;
     }
 
-    .music-player-active #player .player-timeline {
+    .music-player-active #player:not(.has-lyrics-open) .player-timeline {
         grid-column: 2 !important;
         grid-row: 3 !important;
         width: 100% !important;
         margin-block: 0.8rem !important;
     }
 
-    .music-player-active #player .player-controls {
+    .music-player-active #player:not(.has-lyrics-open) .player-controls {
         grid-column: 2 !important;
         grid-row: 4 !important;
         justify-self: center !important;
@@ -922,27 +952,40 @@
         align-self: start !important;
         display: flex !important;
         justify-content: center !important;
+        gap: clamp(0.7rem, 2vw, 1.25rem) !important;
+        --play-btn-size: clamp(4rem, 6vw, 5rem);
+        --media-icon-size: calc(var(--play-btn-size) * 0.4);
+    }
+
+    .music-player-active #player:not(.has-lyrics-open) .player-controls .icon-button {
+        width: clamp(2.8rem, 4.5vw, 3.8rem) !important;
+        height: clamp(2.8rem, 4.5vw, 3.8rem) !important;
+    }
+
+    .music-player-active #player:not(.has-lyrics-open) .player-controls .icon-button.play-main {
+        width: var(--play-btn-size) !important;
+        height: var(--play-btn-size) !important;
     }
 }
 
 @media (orientation: landscape) and (max-height: 580px) and (min-aspect-ratio: 1.2/1) {
-    .music-player-active #player .player-content {
+    .music-player-active #player:not(.has-lyrics-open) .player-content {
         grid-template-columns: 1fr 1.3fr;
         grid-template-rows: 0.5fr auto auto 0.5fr;
         column-gap: clamp(2rem, 4vw, 5rem);
         padding: clamp(1rem, 3vw, 2.5rem);
     }
 
-    .music-player-active #player .player-art {
+    .music-player-active #player:not(.has-lyrics-open) .player-art {
         width: min(40vw, 75dvh, 300px) !important;
         height: min(40vw, 75dvh, 300px) !important;
     }
 
-    .music-player-active #player .player-info {
+    .music-player-active #player:not(.has-lyrics-open) .player-info {
         margin-bottom: 0.25rem !important;
     }
 
-    .music-player-active #player .player-timeline {
+    .music-player-active #player:not(.has-lyrics-open) .player-timeline {
         margin-block: 0.4rem !important;
     }
 }
@@ -968,7 +1011,7 @@
 
 /* Fullscreen Music Player: TV and Ultra Large Display optimization */
 @media (orientation: landscape) and (min-width: 1500px) and (min-height: 820px) {
-    .music-player-active #player .player-content {
+    .music-player-active #player:not(.has-lyrics-open) .player-content {
         max-width: 1400px;
         grid-template-columns: 1fr 1.6fr;
         grid-template-rows: 1fr auto auto auto 1fr;
@@ -976,7 +1019,7 @@
         padding: clamp(3rem, 5vw, 5rem);
     }
 
-    .music-player-active #player .player-art {
+    .music-player-active #player:not(.has-lyrics-open) .player-art {
         grid-column: 1 !important;
         grid-row: 1 / -1 !important;
         width: min(44vw, 75dvh, 640px) !important;
@@ -987,54 +1030,57 @@
         border: 1.5px solid rgba(255, 255, 255, 0.5) !important;
     }
 
-    .music-player-active #player .player-info {
+    .music-player-active #player:not(.has-lyrics-open) .player-info {
         grid-column: 2 !important;
         grid-row: 2 !important;
         margin-bottom: 1rem !important;
     }
 
-    .music-player-active #player .player-title {
+    .music-player-active #player:not(.has-lyrics-open) .player-title {
         font-size: clamp(1.4rem, 2.2vw, 1.8rem) !important;
     }
 
-    .music-player-active #player .player-artist {
+    .music-player-active #player:not(.has-lyrics-open) .player-artist {
         font-size: clamp(0.95rem, 1.4vw, 1.15rem) !important;
         margin-top: 0.35rem !important;
     }
 
-    .music-player-active #player .player-timeline {
+    .music-player-active #player:not(.has-lyrics-open) .player-timeline {
         margin-block: 1.2rem !important;
     }
 
-    .music-player-active #player .player-time {
+    .music-player-active #player:not(.has-lyrics-open) .player-time {
         font-size: 0.95rem !important;
         min-width: 3.5rem !important;
     }
 
     /* Controls should stay standard sleek size, not oversized */
-    .music-player-active #player .player-controls {
-        gap: 0.8rem !important;
+    .music-player-active #player:not(.has-lyrics-open) .player-controls {
+        gap: 1rem !important;
         margin-top: 0.5rem !important;
+        --play-btn-size: 5rem;
+        --media-icon-size: calc(var(--play-btn-size) * 0.4);
     }
 
-    .music-player-active #player .player-controls .icon-button {
-        width: 3.2rem !important;
-        height: 3.2rem !important;
-    }
-
-    .music-player-active #player .player-controls .icon-button.play-main {
+    .music-player-active #player:not(.has-lyrics-open) .player-controls .icon-button {
         width: 4rem !important;
         height: 4rem !important;
     }
 
-    .music-player-active #player .player-controls svg {
-        width: 1.35rem !important;
-        height: 1.35rem !important;
+    .music-player-active #player:not(.has-lyrics-open) .player-controls .icon-button.play-main {
+        width: var(--play-btn-size) !important;
+        height: var(--play-btn-size) !important;
     }
 
-    .music-player-active #player .player-controls .play-main svg {
-        width: 1.70rem !important;
-        height: 1.70rem !important;
+    .music-player-active #player:not(.has-lyrics-open) .player-controls svg,
+    .music-player-active #player:not(.has-lyrics-open) .player-controls .media-icon-wrapper svg {
+        width: var(--media-icon-size) !important;
+        height: var(--media-icon-size) !important;
+    }
+
+    .music-player-active #player:not(.has-lyrics-open) .player-controls .play-main svg {
+        width: var(--media-icon-size) !important;
+        height: var(--media-icon-size) !important;
     }
 }
 
@@ -1083,11 +1129,15 @@
         border: 1px solid rgba(255, 255, 255, 0.15) !important;
     }
 
-    .music-page:not(.music-player-active) #player .player-info {
+    .music-page:not(.music-player-active) #player .player-info,
+    .music-page:not(.music-player-active) #player .player-info-text-group {
         align-items: flex-start !important;
         text-align: left !important;
-        flex: 1 !important;
+        flex: 1 1 auto !important;
         min-width: 0 !important;
+        max-width: 100% !important;
+        width: 100% !important;
+        overflow: hidden !important;
         gap: 0.05rem !important;
     }
 
@@ -1100,6 +1150,9 @@
         overflow: hidden !important;
         text-overflow: ellipsis !important;
         width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        display: block !important;
     }
 
     .music-page:not(.music-player-active) #player .player-title-button {
@@ -1108,7 +1161,12 @@
         text-overflow: ellipsis !important;
         display: block !important;
         width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
         text-align: left !important;
+        -webkit-line-clamp: unset !important;
+        line-clamp: unset !important;
+        -webkit-box-orient: horizontal !important;
     }
 
     .music-page:not(.music-player-active) #player .player-artist {
@@ -1443,6 +1501,7 @@
         -webkit-line-clamp: 3 !important;
         line-clamp: 3 !important;
         -webkit-box-orient: vertical !important;
+        white-space: normal !important;
         overflow: hidden !important;
         text-overflow: ellipsis !important;
         word-break: break-word !important;
@@ -1455,6 +1514,7 @@
         -webkit-line-clamp: 3 !important;
         line-clamp: 3 !important;
         -webkit-box-orient: vertical !important;
+        white-space: normal !important;
         width: 100% !important;
         text-align: left !important;
         border-radius: 0 !important;
@@ -1463,6 +1523,17 @@
         word-break: break-word !important;
         overflow-wrap: break-word !important;
         color: #fff;
+    }
+
+    .music-page.has-playing:not(.music-player-active) #player.column-player .player-title,
+    .music-page.has-playing:not(.music-player-active) #player.column-player .player-title-button {
+        white-space: normal !important;
+        display: block !important;
+        -webkit-line-clamp: unset !important;
+        line-clamp: unset !important;
+        -webkit-box-orient: unset !important;
+        overflow: visible !important;
+        text-overflow: clip !important;
     }
 
     .music-page.has-playing:not(.music-player-active) #player .player-artist {
@@ -1497,7 +1568,7 @@
         grid-row: 4 !important;
         justify-self: center !important;
         width: 100% !important;
-        gap: 0.6rem !important;
+        gap: 1rem !important;
         margin-top: 0.3rem !important;
         padding: 0.5rem 0 !important;
         animation: fadeIn 0.4s ease both !important;
@@ -1506,7 +1577,12 @@
         align-items: center !important;
     }
 
-    .music-page.has-playing:not(.music-player-active) #player .player-controls .icon-button {
+    .music-page.has-playing:not(.music-player-active) #player.column-player .player-controls {
+        --play-btn-size: 4rem;
+        --media-icon-size: calc(var(--play-btn-size) * 0.4);
+    }
+
+    .music-page.has-playing:not(.music-player-active) #player.column-player .player-controls .icon-button {
         width: 2.75rem !important;
         height: 2.75rem !important;
         display: inline-flex !important;
@@ -1514,20 +1590,21 @@
         justify-content: center !important;
     }
 
-    .music-page.has-playing:not(.music-player-active) #player .player-controls .icon-button.play-main {
-        width: 4rem !important;
-        height: 4rem !important;
+    .music-page.has-playing:not(.music-player-active) #player.column-player .player-controls .icon-button.play-main {
+        width: var(--play-btn-size) !important;
+        height: var(--play-btn-size) !important;
+        border-radius: 50% !important;
     }
 
-    .music-page.has-playing:not(.music-player-active) #player .player-controls .play-main svg {
-        width: 1.9rem !important;
-        height: 1.9rem !important;
+    .music-page.has-playing:not(.music-player-active) #player.column-player .player-controls .play-main svg {
+        width: var(--media-icon-size) !important;
+        height: var(--media-icon-size) !important;
     }
 
-    .music-page.has-playing:not(.music-player-active) #player .player-controls .icon-button:not(.play-main) svg,
-    .music-page.has-playing:not(.music-player-active) #player .player-controls .media-icon-wrapper svg {
-        width: 1.33rem !important;
-        height: 1.33rem !important;
+    .music-page.has-playing:not(.music-player-active) #player.column-player .player-controls .icon-button:not(.play-main) svg,
+    .music-page.has-playing:not(.music-player-active) #player.column-player .player-controls .media-icon-wrapper svg {
+        width: var(--media-icon-size) !important;
+        height: var(--media-icon-size) !important;
     }
 
     /* Maintain column layout and animate list/toolbar during transition */
@@ -1978,4 +2055,61 @@
     text-decoration: none !important;
     box-shadow: none !important;
     transform: none !important;
+}
+
+/*
+ * Universal Adaptive Sizing:
+ * Applies EXCLUSIVELY to player views with a rounded (circular) play/pause button:
+ * - Column Player (#player.column-player)
+ * - Fullscreen Player (.music-player-active #player)
+ * - Lyrics View (.lyrics-bottom-bar)
+ *
+ * Normal docked music player is completely untouched (keeps its pill-shaped button and normal icons).
+ */
+#player.column-player .player-controls,
+.music-player-active #player .player-controls,
+.lyrics-bottom-bar .player-controls {
+    --media-icon-size: calc(var(--play-btn-size, 4rem) * 0.4);
+}
+
+#player.column-player .player-controls .icon-button.play-main,
+.music-player-active #player .player-controls .icon-button.play-main,
+.lyrics-bottom-bar .player-controls .icon-button.play-main,
+.lyrics-bottom-bar #play-pause {
+    width: var(--play-btn-size) !important;
+    height: var(--play-btn-size) !important;
+    min-width: var(--play-btn-size) !important;
+    min-height: var(--play-btn-size) !important;
+    padding: 0 !important;
+    border-radius: 50% !important;
+}
+
+#player.column-player .player-controls svg,
+#player.column-player .player-controls .media-icon-wrapper svg,
+#player.column-player .player-controls .play-main svg,
+.music-player-active #player .player-controls svg,
+.music-player-active #player .player-controls .media-icon-wrapper svg,
+.music-player-active #player .player-controls .play-main svg,
+.music-player-active #player #play-pause svg,
+.lyrics-bottom-bar .player-controls svg,
+.lyrics-bottom-bar .player-controls .media-icon-wrapper svg,
+.lyrics-bottom-bar .player-controls .play-main svg,
+.lyrics-bottom-bar #play-pause svg {
+    width: var(--media-icon-size) !important;
+    height: var(--media-icon-size) !important;
+}
+
+/* Compact Mini player: keep titles to one line after the larger player rules. */
+@media (max-width: 380px),
+(max-height: 700px) {
+    .music-page:not(.music-player-active) #player:not(.column-player) .player-title,
+    .music-page:not(.music-player-active) #player:not(.column-player) .player-title-button {
+        display: block !important;
+        -webkit-line-clamp: unset !important;
+        line-clamp: unset !important;
+        -webkit-box-orient: horizontal !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
 }

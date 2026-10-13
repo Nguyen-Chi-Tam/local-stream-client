@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Play, MoreVertical, Download, ExternalLink, ListPlus, ListX, CornerUpLeft, Trash2 } from 'lucide-react';
+import defaultArt from '/default-art.png';
 import DynamicIslandWaveform from './DynamicIslandWaveform.jsx';
 import {
   DropdownMenu,
@@ -251,7 +252,7 @@ const MediaItem = React.memo(({
                 const img = event.currentTarget;
                 if (img.dataset.fallbackApplied === 'true') return;
                 img.dataset.fallbackApplied = 'true';
-                img.src = '/default-art.png';
+                img.src = defaultArt;
                 img.style.opacity = '1';
               }}
             />

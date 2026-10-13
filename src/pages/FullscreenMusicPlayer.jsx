@@ -1,9 +1,31 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Shuffle, Repeat, SkipBack, SkipForward, Play, Pause, Rewind, FastForward, ZoomIn, ZoomOut } from 'lucide-react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import {
+  Shuffle,
+  Repeat,
+  SkipBack,
+  SkipForward,
+  Play,
+  Pause,
+  Rewind,
+  FastForward,
+  ZoomIn,
+  ZoomOut,
+  X,
+} from 'lucide-react';
 import { MorphIcon } from 'morphicons/react';
 import { Play as MorphPlay, Pause as MorphPause } from 'lucide';
 import AnimatedMediaButton from '../components/AnimatedMediaButton.jsx';
-import { dequeueNext, showToast } from '../functions/queueService.js';
+import LyricsView from '../components/LyricsView.jsx';
+import { dequeueNext } from '../functions/queueService.js';
+
+function isElectronRuntime() {
+  return typeof window !== 'undefined' && (
+    Boolean(window.electronZoom) ||
+    Boolean(window.electron) ||
+    Boolean(window.process?.versions?.electron) ||
+    /electron/i.test(window.navigator?.userAgent || '')
+  );
+}
 
 export default function FullscreenMusicPlayer({
   currentlyPlaying,
@@ -117,7 +139,7 @@ export default function FullscreenMusicPlayer({
   }, [currentTime, currentDuration, currentlyPlaying, formatTime, pickDurationSeconds, audioRef]);
 
   function handleSeekInstant(e) {
-    const val = Number(e.target.value) || 0;
+    const val = typeof e === 'number' ? e : (Number(e?.target?.value) || 0);
     const dur = currentDuration || (currentlyPlaying ? pickDurationSeconds(currentlyPlaying) : 0) || 0;
     if (dur > 0) {
       const pct = Math.max(0, Math.min((val / dur) * 100, 100));
@@ -132,7 +154,11 @@ export default function FullscreenMusicPlayer({
         miniTimeTextRef.current.textContent = formatted;
       }
     }
-    handleSeek(e);
+    if (typeof e === 'number') {
+      handleSeek({ target: { value: e } });
+    } else {
+      handleSeek(e);
+    }
   }
 
   function beginSeekbarInteraction() {
@@ -152,6 +178,108 @@ export default function FullscreenMusicPlayer({
     setDisplayArtUrl(currentArtUrl);
     setIsArtZoomed(false);
   }, [currentArtUrl]);
+
+  // ── Lyrics View State & Toggle (v2.1.0) ─────────────────────────────────
+  const [showLyrics, setShowLyrics] = useState(false);
+  const [isClosingLyrics, setIsClosingLyrics] = useState(false);
+  const closeLyricsTimerRef = useRef(null);
+
+  const openLyricsSmoothly = useCallback(() => {
+    if (closeLyricsTimerRef.current) {
+      clearTimeout(closeLyricsTimerRef.current);
+      closeLyricsTimerRef.current = null;
+    }
+    setIsClosingLyrics(false);
+    setShowLyrics(true);
+  }, []);
+
+  const closeLyricsSmoothly = useCallback(() => {
+    if (!showLyrics || isClosingLyrics) return;
+    setIsClosingLyrics(true);
+    if (closeLyricsTimerRef.current) clearTimeout(closeLyricsTimerRef.current);
+    closeLyricsTimerRef.current = setTimeout(() => {
+      setShowLyrics(false);
+      setIsClosingLyrics(false);
+      closeLyricsTimerRef.current = null;
+    }, 360);
+  }, [showLyrics, isClosingLyrics]);
+
+  useEffect(() => {
+    return () => {
+      if (closeLyricsTimerRef.current) clearTimeout(closeLyricsTimerRef.current);
+    };
+  }, []);
+
+  // ── Browser Back Button Navigation: Lyrics -> Fullscreen Player -> Song List ───
+  const lyricsHistoryAddedRef = useRef(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (isElectronRuntime()) return;
+
+    if (isPlayerFullscreen && showLyrics && !lyricsHistoryAddedRef.current) {
+      const timer = setTimeout(() => {
+        if (!lyricsHistoryAddedRef.current && showLyrics && isPlayerFullscreen) {
+          const nextState = { ...(window.history.state || {}), __musicFullscreen: true, __musicLyrics: true };
+          window.history.pushState(nextState, '', window.location.pathname);
+          lyricsHistoryAddedRef.current = true;
+        }
+      }, 30);
+      return () => clearTimeout(timer);
+    }
+
+    if ((!showLyrics || !isPlayerFullscreen) && lyricsHistoryAddedRef.current) {
+      lyricsHistoryAddedRef.current = false;
+      if (window.history.state?.__musicLyrics) {
+        window.history.back();
+      }
+    }
+  }, [showLyrics, isPlayerFullscreen]);
+
+  useEffect(() => {
+    if (isElectronRuntime()) return;
+
+    function handleLyricsPopState(e) {
+      if (!showLyrics) return;
+
+      const state = e.state || window.history.state;
+      if (!state || !state.__musicLyrics) {
+        lyricsHistoryAddedRef.current = false;
+        closeLyricsSmoothly();
+      }
+    }
+
+    window.addEventListener('popstate', handleLyricsPopState);
+    return () => {
+      window.removeEventListener('popstate', handleLyricsPopState);
+    };
+  }, [showLyrics, closeLyricsSmoothly]);
+
+  const toggleLyrics = useCallback(() => {
+    if (!isPlayerFullscreen) {
+      setPlayerFullscreen?.(true);
+      openLyricsSmoothly();
+    } else if (showLyrics && !isClosingLyrics) {
+      closeLyricsSmoothly();
+    } else {
+      openLyricsSmoothly();
+    }
+  }, [isPlayerFullscreen, setPlayerFullscreen, showLyrics, isClosingLyrics, closeLyricsSmoothly, openLyricsSmoothly]);
+
+  // Keyboard shortcut: 'L' toggles lyrics
+  useEffect(() => {
+    function handleLyricsKeyDown(e) {
+      const active = document.activeElement;
+      if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)) return;
+      if (e.altKey || e.ctrlKey || e.metaKey) return;
+      if (e.key === 'l' || e.key === 'L') {
+        e.preventDefault();
+        toggleLyrics();
+      }
+    }
+    window.addEventListener('keydown', handleLyricsKeyDown);
+    return () => window.removeEventListener('keydown', handleLyricsKeyDown);
+  }, [toggleLyrics]);
 
   function playPreviousTrack() {
     const idx = getPrevIndex();
@@ -272,9 +400,337 @@ export default function FullscreenMusicPlayer({
   const effectiveAudioTime = (audioRef.current && Number.isFinite(audioRef.current.currentTime)) ? audioRef.current.currentTime : currentTime;
   const effectiveAudioDur = currentDuration || (currentlyPlaying ? pickDurationSeconds(currentlyPlaying) : 0) || 0;
 
+  const isColumnPlayer = Boolean(isLargeLayout && !isPlayerFullscreen);
+  const isAdaptiveIcons = Boolean(isColumnPlayer || isPlayerFullscreen);
+  const iconStyle = isAdaptiveIcons
+    ? { width: 'var(--media-icon-size)', height: 'var(--media-icon-size)' }
+    : undefined;
+  const normalIconSize = isAdaptiveIcons ? 28 : 18;
+  const normalPlayIconSize = isAdaptiveIcons ? 28 : 20;
+
+  const renderArtElement = (isShrunk = false) => {
+    if (!currentlyPlaying) return null;
+    return (
+      <div
+        ref={isShrunk ? undefined : artButtonRef}
+        className={`player-art select-none${isShrunk ? ' is-shrunk-art' : ''}`}
+        role="button"
+        tabIndex="0"
+        aria-label={isPlayerFullscreen ? (showLyrics ? 'Return to album cover' : 'Show music list (F)') : 'Show fullscreen album art (F)'}
+        title={isPlayerFullscreen ? (showLyrics ? 'Return to album cover' : 'Show music list (F)') : 'Show fullscreen album art (F)'}
+        style={{ touchAction: 'none' }}
+        onTouchStart={isShrunk ? undefined : handleArtTouchStart}
+        onTouchMove={isShrunk ? undefined : handleArtTouchMove}
+        onTouchEnd={isShrunk ? undefined : handleArtTouchEnd}
+        onTouchCancel={isShrunk ? undefined : handleArtTouchCancel}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            if (showLyrics) {
+              setShowLyrics(false);
+            } else {
+              setPlayerFullscreen?.((prev) => !prev);
+            }
+          }
+        }}
+        onClick={(event) => {
+          if (ignoreNextClickRef.current) {
+            event.preventDefault();
+            ignoreNextClickRef.current = false;
+            return;
+          }
+          if (isPlayerFullscreen && showLyrics) {
+            setShowLyrics(false);
+            return;
+          }
+          if (setPlayerFullscreen) {
+            setPlayerFullscreen((prev) => !prev);
+          }
+        }}
+      >
+        <div className="player-art-frame select-none">
+          <div
+            className="player-art-frame-blur select-none"
+            style={{ backgroundImage: `url(${displayArtUrl})` }}
+          />
+          <img
+            className={`player-art-foreground select-none${isArtZoomed && !isShrunk ? ' is-art-zoomed' : ''}`}
+            src={displayArtUrl}
+            alt={pickTitle(currentlyPlaying)}
+            draggable={false}
+            style={{ objectFit: isArtZoomed && !isShrunk ? 'cover' : undefined, pointerEvents: 'auto', WebkitTouchCallout: 'default', borderRadius: 'inherit' }}
+            onError={() => {
+              if (displayArtUrl !== defaultArt) {
+                setDisplayArtUrl(defaultArt);
+              }
+            }}
+          />
+          {(isPlayerFullscreen || isLargeLayout) && !showLyrics && !isShrunk && (
+            <button
+              type="button"
+              className="player-art-zoom-button select-none"
+              aria-label={isArtZoomed ? 'Show full album art' : 'Fill album art frame'}
+              title={isArtZoomed ? 'Show full album art' : 'Fill album art frame'}
+              onPointerDown={(event) => event.stopPropagation()}
+              onTouchStart={(event) => event.stopPropagation()}
+              onTouchEnd={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation();
+                setIsArtZoomed((prev) => !prev);
+              }}
+            >
+              {isArtZoomed ? <ZoomOut size={16} /> : <ZoomIn size={16} />}
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const renderInfoElement = () => (
+    <div className="player-info select-text">
+      <div className="player-info-text-group select-text">
+        <div id="current-title" className="player-title select-text">
+          <button
+            type="button"
+            className="player-title-button select-text"
+            onClick={(e) => {
+              if (isPlayerFullscreen) {
+                toggleLyrics();
+              } else if (scrollToCurrent) {
+                scrollToCurrent(e);
+              }
+            }}
+            title={
+              isPlayerFullscreen
+                ? `${currentlyPlaying ? pickTitle(currentlyPlaying) : ''} • Lyrics (L)`
+                : (currentlyPlaying ? pickTitle(currentlyPlaying) : '')
+            }
+          >
+            {currentlyPlaying ? pickTitle(currentlyPlaying) : ''}
+          </button>
+        </div>
+        <div id="current-artist" className="player-artist select-text">
+          {currentlyPlaying && pickArtist(currentlyPlaying) ? (
+            <>
+              <span className="player-artist-name select-text">
+                {pickArtist(currentlyPlaying)}
+              </span>
+              <span className="mini-player-timestamp select-text">
+                &nbsp;· <span ref={miniTimeTextRef}>{formatTime(effectiveAudioTime)}</span>
+              </span>
+            </>
+          ) : (
+            <span className="mini-player-timestamp select-text">
+              <span ref={miniTimeTextRef}>{formatTime(effectiveAudioTime)}</span>
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderTimelineElement = () => (
+    <div className="player-timeline select-none" aria-label="Playback timeline">
+      <span ref={timeTextRef} className="player-time select-none">{formatTime(effectiveAudioTime)}</span>
+      <div className={`player-seekbar-wrap select-none${isSeekbarActive ? ' is-scrubbing' : ''}${isPlaying ? ' is-playing' : ''}`}>
+        <div className="seekbar-custom-track select-none" />
+        <div
+          className="seekbar-custom-buffered select-none"
+          style={{
+            width: `${Math.max(
+              0,
+              Math.min(
+                (bufferedTime / (effectiveAudioDur || 1)) * 100,
+                100
+              )
+            )}%`,
+          }}
+        />
+        <div
+          ref={playedRef}
+          className="seekbar-custom-played select-none"
+          style={{
+            width: `${Math.max(
+              0,
+              Math.min(
+                (effectiveAudioTime / (effectiveAudioDur || 1)) * 100,
+                100
+              )
+            )}%`,
+          }}
+        />
+        <input
+          ref={rangeInputRef}
+          type="range"
+          className="select-none"
+          min="0"
+          max={effectiveAudioDur}
+          value={Math.min(effectiveAudioTime, effectiveAudioDur)}
+          step="any"
+          onChange={handleSeekInstant}
+          onInput={handleSeekInstant}
+          onPointerDown={beginSeekbarInteraction}
+          onPointerUp={endSeekbarInteraction}
+          onPointerCancel={endSeekbarInteraction}
+          onTouchStart={beginSeekbarInteraction}
+          onTouchEnd={endSeekbarInteraction}
+          onTouchCancel={endSeekbarInteraction}
+          onBlur={endSeekbarInteraction}
+        />
+      </div>
+      <span className="player-time select-none">{formatTime(effectiveAudioDur)}</span>
+    </div>
+  );
+
+  const renderControlsElement = () => (
+    <div className="player-controls select-none" aria-label="Playback controls">
+      <button
+        id="repeat-toggle"
+        type="button"
+        className={`icon-button select-none ${isRepeat ? 'toggle-active' : ''}`}
+        aria-label="Toggle repeat"
+        aria-pressed={isRepeat ? 'true' : 'false'}
+        onClick={() => {
+          const nextState = !isRepeat;
+          setIsRepeat(nextState);
+        }}
+      >
+        <Repeat size={normalIconSize} style={iconStyle} />
+      </button>
+      <AnimatedMediaButton
+        direction="left"
+        id="prev-track"
+        type="button"
+        className="select-none"
+        aria-label="Previous track"
+        onClick={playPreviousTrack}
+      >
+        <SkipBack size={normalIconSize} style={iconStyle} />
+      </AnimatedMediaButton>
+      <AnimatedMediaButton
+        direction="left"
+        id="rewind-10"
+        type="button"
+        className="select-none"
+        aria-label="Rewind 10 seconds"
+        onClick={() => skipRelative(-10)}
+      >
+        <Rewind size={normalIconSize} style={iconStyle} />
+      </AnimatedMediaButton>
+      <button
+        id="play-pause"
+        type="button"
+        className="icon-button play-main select-none"
+        aria-label={isPlaying ? 'Pause' : 'Play'}
+        aria-pressed={isPlaying ? 'true' : 'false'}
+        onClick={togglePlayPause}
+      >
+        <MorphIcon
+          icon={isPlaying ? MorphPause : MorphPlay}
+          size={normalPlayIconSize}
+          style={iconStyle}
+          fill="currentColor"
+          stroke="none"
+          strokeWidth={0}
+          spring="snappy"
+        />
+      </button>
+
+      <AnimatedMediaButton
+        direction="right"
+        id="forward-10"
+        type="button"
+        className="select-none"
+        aria-label="Fast forward 10 seconds"
+        onClick={() => skipRelative(10)}
+      >
+        <FastForward size={normalIconSize} style={iconStyle} />
+      </AnimatedMediaButton>
+      <AnimatedMediaButton
+        direction="right"
+        id="next-track"
+        type="button"
+        className="select-none"
+        aria-label="Next track"
+        onClick={playNextTrack}
+      >
+        <SkipForward size={normalIconSize} style={iconStyle} />
+      </AnimatedMediaButton>
+      <button
+        id="shuffle-toggle"
+        type="button"
+        className={`icon-button select-none ${isShuffle ? 'toggle-active' : ''}`}
+        aria-label="Toggle shuffle"
+        aria-pressed={isShuffle ? 'true' : 'false'}
+        onClick={() => {
+          const nextState = !isShuffle;
+          setIsShuffle(nextState);
+        }}
+      >
+        <Shuffle size={normalIconSize} style={iconStyle} />
+      </button>
+    </div>
+  );
+
   return (
     <>
-      <footer className="player select-none" id="player" hidden={!currentlyPlaying}>
+      {isPlayerFullscreen && showLyrics && currentlyPlaying && (
+        <LyricsView
+          currentlyPlaying={currentlyPlaying}
+          currentArtUrl={currentArtUrl}
+          displayArtUrl={displayArtUrl}
+          defaultArt={defaultArt}
+          isArtZoomed={isArtZoomed}
+          setIsArtZoomed={setIsArtZoomed}
+          currentTime={currentTime}
+          currentDuration={currentDuration}
+          bufferedTime={bufferedTime}
+          isPlaying={isPlaying}
+          isRepeat={isRepeat}
+          setIsRepeat={setIsRepeat}
+          isShuffle={isShuffle}
+          setIsShuffle={setIsShuffle}
+          handleSeek={handleSeekInstant}
+          togglePlayPause={togglePlayPause}
+          playPreviousTrack={playPreviousTrack}
+          playNextTrack={playNextTrack}
+          skipRelative={skipRelative}
+          formatTime={formatTime}
+          isClosing={isClosingLyrics}
+          onCloseLyrics={closeLyricsSmoothly}
+          onExitToSmallPlayer={() => {
+            if (closeLyricsTimerRef.current) {
+              clearTimeout(closeLyricsTimerRef.current);
+              closeLyricsTimerRef.current = null;
+            }
+            setIsClosingLyrics(false);
+            setShowLyrics(false);
+            if (lyricsHistoryAddedRef.current && window.history.state?.__musicLyrics) {
+              lyricsHistoryAddedRef.current = false;
+              window.history.go(-2);
+            } else {
+              setPlayerFullscreen?.(false);
+            }
+          }}
+          audioRef={audioRef}
+          pickTitle={pickTitle}
+          pickArtist={pickArtist}
+          pickDurationSeconds={pickDurationSeconds}
+        />
+      )}
+
+      <footer
+        className={`player select-none${isColumnPlayer ? ' column-player' : ''}${
+          isPlayerFullscreen && showLyrics
+            ? isClosingLyrics
+              ? ' lyrics-transition-out'
+              : ' lyrics-transition-in'
+            : ''
+        }`}
+        id="player"
+        hidden={!currentlyPlaying}
+      >
         {currentlyPlaying && (
           <div
             className="player-background select-none"
@@ -284,246 +740,11 @@ export default function FullscreenMusicPlayer({
         <div className="player-overlay select-none" style={{ pointerEvents: 'none' }} />
         <div className="player-content select-none">
           <div className="player-main select-none">
-            {currentlyPlaying && (
-              <div
-                ref={artButtonRef}
-                className="player-art select-none"
-                role="button"
-                tabIndex="0"
-                aria-label={isPlayerFullscreen ? 'Show music list (F)' : 'Show fullscreen album art (F)'}
-                title={isPlayerFullscreen ? 'Show music list (F)' : 'Show fullscreen album art (F)'}
-                style={{ touchAction: 'none' }}
-                onTouchStart={handleArtTouchStart}
-                onTouchMove={handleArtTouchMove}
-                onTouchEnd={handleArtTouchEnd}
-                onTouchCancel={handleArtTouchCancel}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault();
-                    setPlayerFullscreen?.((prev) => !prev);
-                  }
-                }}
-                onClick={(event) => {
-                  if (ignoreNextClickRef.current) {
-                    event.preventDefault();
-                    ignoreNextClickRef.current = false;
-                    return;
-                  }
-                  if (setPlayerFullscreen) {
-                    setPlayerFullscreen((prev) => !prev);
-                  }
-                }}
-              >
-                <div className="player-art-frame select-none">
-                  <div
-                    className="player-art-frame-blur select-none"
-                    style={{ backgroundImage: `url(${displayArtUrl})` }}
-                  />
-                  <img
-                    className={`player-art-foreground select-none${isArtZoomed ? ' is-art-zoomed' : ''}`}
-                    src={displayArtUrl}
-                    alt={pickTitle(currentlyPlaying)}
-                    draggable={false}
-                    style={{ objectFit: isArtZoomed ? 'cover' : undefined, pointerEvents: 'auto', WebkitTouchCallout: 'default', borderRadius: 'inherit' }}
-                    onError={() => {
-                      if (displayArtUrl !== defaultArt) {
-                        setDisplayArtUrl(defaultArt);
-                      }
-                    }}
-                  />
-                  {(isPlayerFullscreen || isLargeLayout) && (
-                    <button
-                      type="button"
-                      className="player-art-zoom-button select-none"
-                      aria-label={isArtZoomed ? 'Show full album art' : 'Fill album art frame'}
-                      title={isArtZoomed ? 'Show full album art' : 'Fill album art frame'}
-                      onPointerDown={(event) => event.stopPropagation()}
-                      onTouchStart={(event) => event.stopPropagation()}
-                      onTouchEnd={(event) => event.stopPropagation()}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setIsArtZoomed((prev) => !prev);
-                      }}
-                    >
-                      {isArtZoomed ? <ZoomOut size={16} /> : <ZoomIn size={16} />}
-                    </button>
-                  )}
-                </div>
-              </div>
-            )}
-            <div className="player-info select-text">
-              <div id="current-title" className="player-title select-text">
-                <button
-                  type="button"
-                  className="player-title-button select-text"
-                  onClick={scrollToCurrent}
-                  title={currentlyPlaying ? pickTitle(currentlyPlaying) : ''}
-                >
-                  {currentlyPlaying ? pickTitle(currentlyPlaying) : ''}
-                </button>
-              </div>
-              <div id="current-artist" className="player-artist select-text">
-                {currentlyPlaying && pickArtist(currentlyPlaying) ? (
-                  <>
-                    <span className="player-artist-name select-text">
-                      {pickArtist(currentlyPlaying)}
-                    </span>
-                    <span className="mini-player-timestamp select-text">
-                      &nbsp;· <span ref={miniTimeTextRef}>{formatTime(effectiveAudioTime)}</span>
-                    </span>
-                  </>
-                ) : (
-                  <span className="mini-player-timestamp select-text">
-                    <span ref={miniTimeTextRef}>{formatTime(effectiveAudioTime)}</span>
-                  </span>
-                )}
-              </div>
-            </div>
+            {renderArtElement(false)}
+            {renderInfoElement()}
           </div>
-          <div className="player-timeline select-none" aria-label="Playback timeline">
-            <span ref={timeTextRef} className="player-time select-none">{formatTime(effectiveAudioTime)}</span>
-            <div className={`player-seekbar-wrap select-none${isSeekbarActive ? ' is-scrubbing' : ''}${isPlaying ? ' is-playing' : ''}`}>
-              <div className="seekbar-custom-track select-none" />
-              <div
-                className="seekbar-custom-buffered select-none"
-                style={{
-                  width: `${Math.max(
-                    0,
-                    Math.min(
-                      (bufferedTime / (effectiveAudioDur || 1)) * 100,
-                      100
-                    )
-                  )}%`,
-                }}
-              />
-              <div
-                ref={playedRef}
-                className="seekbar-custom-played select-none"
-                style={{
-                  width: `${Math.max(
-                    0,
-                    Math.min(
-                      (effectiveAudioTime / (effectiveAudioDur || 1)) * 100,
-                      100
-                    )
-                  )}%`,
-                }}
-              />
-              <input
-                ref={rangeInputRef}
-                type="range"
-                className="select-none"
-                min="0"
-                max={effectiveAudioDur}
-                value={Math.min(effectiveAudioTime, effectiveAudioDur)}
-                step="any"
-                onChange={handleSeekInstant}
-                onInput={handleSeekInstant}
-                onPointerDown={beginSeekbarInteraction}
-                onPointerUp={endSeekbarInteraction}
-                onPointerCancel={endSeekbarInteraction}
-                onTouchStart={beginSeekbarInteraction}
-                onTouchEnd={endSeekbarInteraction}
-                onTouchCancel={endSeekbarInteraction}
-                onBlur={endSeekbarInteraction}
-              />
-            </div>
-            <span className="player-time select-none">{formatTime(effectiveAudioDur)}</span>
-          </div>
-          <div className="player-controls select-none" aria-label="Playback controls">
-            <button
-              id="repeat-toggle"
-              type="button"
-              className={`icon-button select-none ${isRepeat ? 'toggle-active' : ''}`}
-              aria-label="Toggle repeat"
-              aria-pressed={isRepeat ? 'true' : 'false'}
-              onClick={() => {
-                const nextState = !isRepeat;
-                setIsRepeat(nextState);
-                showToast({
-                  action: 'repeat',
-                  message: `Loop: ${nextState ? 'On' : 'Off'}`,
-                });
-              }}
-            >
-              <Repeat size={28} />
-            </button>
-            <AnimatedMediaButton
-              direction="left"
-              id="prev-track"
-              type="button"
-              className="select-none"
-              aria-label="Previous track"
-              onClick={playPreviousTrack}
-            >
-              <SkipBack size={28} />
-            </AnimatedMediaButton>
-            <AnimatedMediaButton
-              direction="left"
-              id="rewind-10"
-              type="button"
-              className="select-none"
-              aria-label="Rewind 10 seconds"
-              onClick={() => skipRelative(-10)}
-            >
-              <Rewind size={28} />
-            </AnimatedMediaButton>
-            <button
-              id="play-pause"
-              type="button"
-              className="icon-button play-main select-none"
-              aria-label={isPlaying ? 'Pause' : 'Play'}
-              aria-pressed={isPlaying ? 'true' : 'false'}
-              onClick={togglePlayPause}
-            >
-              <MorphIcon
-                icon={isPlaying ? MorphPause : MorphPlay}
-                size={20}
-                fill="currentColor"
-                stroke="none"
-                strokeWidth={0}
-                spring="snappy"
-              />
-            </button>
-
-            <AnimatedMediaButton
-              direction="right"
-              id="forward-10"
-              type="button"
-              className="select-none"
-              aria-label="Fast forward 10 seconds"
-              onClick={() => skipRelative(10)}
-            >
-              <FastForward size={28} />
-            </AnimatedMediaButton>
-            <AnimatedMediaButton
-              direction="right"
-              id="next-track"
-              type="button"
-              className="select-none"
-              aria-label="Next track"
-              onClick={playNextTrack}
-            >
-              <SkipForward size={28} />
-            </AnimatedMediaButton>
-            <button
-              id="shuffle-toggle"
-              type="button"
-              className={`icon-button select-none ${isShuffle ? 'toggle-active' : ''}`}
-              aria-label="Toggle shuffle"
-              aria-pressed={isShuffle ? 'true' : 'false'}
-              onClick={() => {
-                const nextState = !isShuffle;
-                setIsShuffle(nextState);
-                showToast({
-                  action: 'shuffle',
-                  message: `Shuffle: ${nextState ? 'On' : 'Off'}`,
-                });
-              }}
-            >
-              <Shuffle size={28} />
-            </button>
-          </div>
+          {renderTimelineElement()}
+          {renderControlsElement()}
         </div>
       </footer>
       <audio

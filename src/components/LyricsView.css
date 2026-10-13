@@ -1,0 +1,1312 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   Apple Music Style Time-Synced Lyrics View (v2.1.0)
+───────────────────────────────────────────────────────────────────────────── */
+.lyrics-view-root {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  background: transparent;
+  overflow: hidden;
+  user-select: none;
+  font-family: inherit;
+  animation: lyricsRootFadeIn 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.lyrics-view-root.is-closing {
+  pointer-events: none;
+  animation: lyricsRootFadeOut 0.36s cubic-bezier(0.32, 0, 0.67, 0) both;
+}
+
+@keyframes lyricsRootFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes lyricsRootFadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* Dynamic blurred album background (50% blur reduction: 24px) */
+.lyrics-view-bg {
+  position: absolute;
+  inset: -30px;
+  background-size: cover;
+  background-position: center;
+  filter: blur(24px) saturate(1.35) brightness(0.52);
+  transform: scale(1.12);
+  opacity: 0.88;
+  pointer-events: none;
+  z-index: 1;
+  animation: lyricsBgZoomIn 0.48s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.lyrics-view-root.is-closing .lyrics-view-bg {
+  animation: lyricsBgZoomOut 0.36s cubic-bezier(0.32, 0, 0.67, 0) both;
+}
+
+@keyframes lyricsBgZoomIn {
+  from {
+    opacity: 0;
+    transform: scale(1.05);
+  }
+  to {
+    opacity: 0.88;
+    transform: scale(1.12);
+  }
+}
+
+@keyframes lyricsBgZoomOut {
+  from {
+    opacity: 0.88;
+    transform: scale(1.12);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.05);
+  }
+}
+
+.lyrics-view-overlay {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 20%, rgba(2, 6, 23, 0.42), rgba(2, 6, 23, 0.9) 85%);
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Content Container */
+.lyrics-view-container {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  box-sizing: border-box;
+  justify-content: space-between;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   CHOREOGRAPHED TRANSITION: FullscreenMusicPlayer <-> LyricsView
+───────────────────────────────────────────────────────────────────────────── */
+.music-player-active #player .player-art,
+.music-player-active #player .player-info,
+.music-player-active #player .player-timeline,
+.music-player-active #player .player-controls {
+  transition:
+    transform 0.42s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.36s cubic-bezier(0.22, 1, 0.36, 1),
+    filter 0.38s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform, opacity, filter;
+}
+
+.music-player-active #player.lyrics-transition-in {
+  pointer-events: none !important;
+}
+
+/* Hide the underlying player art, title/artist info and zoom button when LyricsView is open */
+.music-player-active #player.lyrics-transition-in .player-art,
+.music-player-active #player.lyrics-transition-in .player-info,
+.music-player-active #player.lyrics-transition-in .player-art-zoom-button {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  transition: none !important;
+}
+
+.music-player-active #player.lyrics-transition-in .player-timeline,
+.music-player-active #player.lyrics-transition-in .player-controls {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  transform: translateY(8px) scale(0.97) !important;
+  filter: blur(6px) !important;
+}
+
+.music-player-active #player.lyrics-transition-out .player-art,
+.music-player-active #player.lyrics-transition-out .player-info,
+.music-player-active #player.lyrics-transition-out .player-timeline,
+.music-player-active #player.lyrics-transition-out .player-controls {
+  opacity: 1 !important;
+  visibility: visible !important;
+  transform: translateY(0) scale(1) !important;
+  filter: blur(0px) !important;
+}
+
+/* Portrait LyricsView Element Choreography */
+.lyrics-header-bar {
+  animation: lyricsHeaderMorphIn 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+  will-change: transform, opacity, filter;
+}
+
+.lyrics-view-root.is-closing .lyrics-header-bar {
+  animation: lyricsHeaderMorphOut 0.34s cubic-bezier(0.32, 0, 0.67, 0) both;
+}
+
+@keyframes lyricsHeaderMorphIn {
+  from {
+    opacity: 0;
+    transform: translateY(26px) scale(1.06);
+    filter: blur(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0px);
+  }
+}
+
+@keyframes lyricsHeaderMorphOut {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0px);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(24px) scale(1.06);
+    filter: blur(8px);
+  }
+}
+
+.lyrics-stage-area {
+  animation: lyricsStageRiseIn 0.46s cubic-bezier(0.22, 1, 0.36, 1) 0.02s both;
+  will-change: transform, opacity, filter;
+}
+
+.lyrics-view-root.is-closing .lyrics-stage-area {
+  animation: lyricsStageSinkOut 0.32s cubic-bezier(0.32, 0, 0.67, 0) both;
+}
+
+@keyframes lyricsStageRiseIn {
+  from {
+    opacity: 0;
+    transform: translateY(38px) scale(0.96);
+    filter: blur(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0px);
+  }
+}
+
+@keyframes lyricsStageSinkOut {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0px);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(30px) scale(0.96);
+    filter: blur(10px);
+  }
+}
+
+.lyrics-bottom-bar {
+  animation: lyricsBottomSlideIn 0.42s cubic-bezier(0.22, 1, 0.36, 1) 0.04s both;
+  will-change: transform, opacity;
+}
+
+.lyrics-view-root.is-closing .lyrics-bottom-bar {
+  animation: lyricsBottomSlideOut 0.3s cubic-bezier(0.32, 0, 0.67, 0) both;
+}
+
+@keyframes lyricsBottomSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes lyricsBottomSlideOut {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   PORTRAIT MODE (Matching Apple Music Reference):
+   Top: Shrunk Album Art + Title/Artist + Action Buttons
+   Middle: Borderless scrolling lyrics taking the full height
+   Bottom: Timeline seekbar + Playback controllers
+───────────────────────────────────────────────────────────────────────────── */
+@media (orientation: portrait), (max-aspect-ratio: 1/1) {
+  .lyrics-view-container {
+    padding: clamp(0.75rem, 2vh, 1.25rem) clamp(1rem, 3.5vw, 1.6rem) clamp(1.25rem, 3.5vh, 2.25rem);
+    gap: clamp(0.5rem, 1.2vh, 1rem);
+  }
+
+  /* 1. Top Header Bar */
+  .lyrics-header-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    width: 100%;
+    max-width: 640px;
+    margin: 0 auto;
+    flex: 0 0 auto;
+    padding-bottom: 0.25rem;
+  }
+
+  .lyrics-header-art-thumb {
+    width: 48px;
+    height: 48px;
+    min-width: 48px;
+    min-height: 48px;
+    border-radius: 0.65rem;
+    overflow: hidden;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: transform 0.18s ease;
+  }
+
+  .lyrics-header-art-thumb:hover {
+    transform: scale(1.05);
+  }
+
+  .lyrics-header-art-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .lyrics-header-meta {
+    flex: 1 1 auto;
+    min-width: 0;
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .lyrics-header-title {
+    font-family: inherit;
+    font-size: clamp(0.98rem, 3.8vw, 1.18rem);
+    font-weight: 600;
+    line-height: 1.25;
+    color: #ffffff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+    transition: color 0.18s ease;
+  }
+
+  .lyrics-header-title:hover {
+    color: #38bdf8;
+  }
+
+  .lyrics-header-artist {
+    font-family: inherit;
+    font-size: clamp(0.82rem, 2.8vw, 0.94rem);
+    font-weight: 400;
+    color: rgba(226, 232, 240, 0.72);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-top: 1px;
+  }
+
+  .lyrics-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-shrink: 0;
+  }
+
+  /* 2. Middle Lyrics Scroll Area (takes the stage!) */
+  .lyrics-stage-area {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: 640px;
+    margin: 0 auto;
+    flex: 1 1 auto;
+    min-height: 0;
+    position: relative;
+  }
+
+  .lyrics-landscape-art-box {
+    display: none !important; /* Hide large art in portrait */
+  }
+
+  .lyrics-landscape-right-box {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+  }
+
+  .lyrics-landscape-header {
+    display: none !important;
+  }
+
+  .lyrics-landscape-track-info {
+    display: none !important;
+  }
+
+  /* 3. Bottom Controllers in Portrait */
+  .lyrics-bottom-bar {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    max-width: 640px;
+    margin: 0 auto;
+    flex: 0 0 auto;
+    padding-top: clamp(0.5rem, 1.2vh, 1rem);
+    padding-bottom: clamp(0.4rem, 1vh, 0.8rem);
+  }
+
+  .lyrics-bottom-bar .player-controls {
+    justify-content: space-evenly !important;
+    gap: 0.25rem !important;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   LANDSCAPE MODE:
+   Left: Large Album Art square + Title/Artist shifted underneath
+   Right: Scrolling lyrics on top
+   Bottom: Centered timeline seekbar & playback controllers
+───────────────────────────────────────────────────────────────────────────── */
+@media (orientation: landscape) and (min-aspect-ratio: 1/1) {
+  .lyrics-view-container {
+    padding: clamp(1rem, 2vh, 1.8rem) clamp(2rem, 4vw, 4rem) clamp(1.2rem, 2.5vh, 2rem);
+    gap: clamp(0.5rem, 1.2vh, 1rem);
+  }
+
+  /* Hide portrait top header bar in landscape */
+  .lyrics-header-bar {
+    display: none !important;
+  }
+
+  /* 2-Column Middle Stage: Strict 50:50 Split between Info Group and Lyrics View */
+  .lyrics-stage-area {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 auto !important;
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    gap: 0 !important;
+    animation: none !important;
+  }
+
+  .lyrics-view-root.is-closing .lyrics-stage-area {
+    animation: none !important;
+  }
+
+  /* Left Column: Info Group (50% of total width) */
+  .lyrics-landscape-art-box {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex: 0 0 50% !important;
+    width: 50% !important;
+    max-width: 50% !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    padding: clamp(0.5rem, 1.5vh, 1.5rem) clamp(1rem, 2.5vw, 3rem) !important;
+    box-sizing: border-box !important;
+    animation: lyricsLandscapeArtIn 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+    will-change: transform, opacity, filter;
+  }
+
+  .lyrics-view-root.is-closing .lyrics-landscape-art-box {
+    animation: lyricsLandscapeArtOut 0.32s cubic-bezier(0.32, 0, 0.67, 0) both;
+  }
+
+  .lyrics-landscape-right-box {
+    animation: lyricsLandscapeLyricsIn 0.46s cubic-bezier(0.22, 1, 0.36, 1) 0.03s both;
+    will-change: transform, opacity, filter;
+  }
+
+  .lyrics-view-root.is-closing .lyrics-landscape-right-box {
+    animation: lyricsLandscapeLyricsOut 0.32s cubic-bezier(0.32, 0, 0.67, 0) both;
+  }
+
+  @keyframes lyricsLandscapeArtIn {
+    from {
+      opacity: 0;
+      transform: translate3d(18px, -10px, 0) scale(0.94);
+      filter: blur(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translate3d(0, 0, 0) scale(1);
+      filter: blur(0px);
+    }
+  }
+
+  @keyframes lyricsLandscapeArtOut {
+    from {
+      opacity: 1;
+      transform: translate3d(0, 0, 0) scale(1);
+      filter: blur(0px);
+    }
+    to {
+      opacity: 0;
+      transform: translate3d(16px, -8px, 0) scale(0.95);
+      filter: blur(8px);
+    }
+  }
+
+  @keyframes lyricsLandscapeLyricsIn {
+    from {
+      opacity: 0;
+      transform: translate3d(28px, 16px, 0) scale(0.96);
+      filter: blur(12px);
+    }
+    to {
+      opacity: 1;
+      transform: translate3d(0, 0, 0) scale(1);
+      filter: blur(0px);
+    }
+  }
+
+  @keyframes lyricsLandscapeLyricsOut {
+    from {
+      opacity: 1;
+      transform: translate3d(0, 0, 0) scale(1);
+      filter: blur(0px);
+    }
+    to {
+      opacity: 0;
+      transform: translate3d(24px, 14px, 0) scale(0.96);
+      filter: blur(10px);
+    }
+  }
+
+  .lyrics-landscape-info-wrapper {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    justify-content: center !important;
+    width: min(100%, calc(100dvh - 290px), 520px) !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .lyrics-landscape-art-frame {
+    position: relative !important;
+    width: 100% !important;
+    aspect-ratio: 1 / 1 !important;
+    border-radius: clamp(1rem, 1.8vw, 1.6rem) !important;
+    overflow: hidden !important;
+    box-shadow: 0 24px 56px rgba(0, 0, 0, 0.6) !important;
+    border: 1.5px solid rgba(255, 255, 255, 0.35) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    isolation: isolate !important;
+    cursor: pointer !important;
+    transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.22s ease !important;
+  }
+
+  .lyrics-landscape-art-frame:hover {
+    transform: scale(1.015) !important;
+    box-shadow: 0 28px 64px rgba(0, 0, 0, 0.75) !important;
+  }
+
+  .lyrics-landscape-art-frame .player-art-frame-blur {
+    position: absolute !important;
+    inset: -20px !important;
+    background-size: cover !important;
+    background-position: center !important;
+    filter: blur(16px) saturate(1.2) brightness(0.65) !important;
+    z-index: 1 !important;
+  }
+
+  .lyrics-landscape-art-frame .lyrics-landscape-art-img {
+    position: relative !important;
+    z-index: 2 !important;
+    width: 100% !important;
+    height: 100% !important;
+    display: block !important;
+    border-radius: inherit !important;
+    transition: object-fit 0.2s ease !important;
+  }
+
+  .lyrics-landscape-art-frame .player-art-zoom-button {
+    position: absolute !important;
+    right: clamp(0.5rem, 1.2vw, 0.85rem) !important;
+    bottom: clamp(0.5rem, 1.2vw, 0.85rem) !important;
+    z-index: 5 !important;
+    width: 2.2rem !important;
+    height: 2.2rem !important;
+    border-radius: 50% !important;
+    background: rgba(15, 23, 42, 0.6) !important;
+    border: 1px solid rgba(255, 255, 255, 0.4) !important;
+    color: #ffffff !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    cursor: pointer !important;
+    transition: opacity 0.18s ease, transform 0.18s ease, background 0.18s ease !important;
+    backdrop-filter: blur(8px) !important;
+  }
+
+  .lyrics-landscape-art-frame .player-art-zoom-button:hover {
+    background: rgba(30, 41, 59, 0.85) !important;
+    transform: scale(1.08) !important;
+    border-color: rgba(255, 255, 255, 0.7) !important;
+  }
+
+  /* Info row: Title/Artist underneath album art */
+  .lyrics-landscape-meta-row {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    width: 100% !important;
+    margin-top: clamp(0.75rem, 1.6vh, 1.25rem) !important;
+    box-sizing: border-box !important;
+  }
+
+  .lyrics-landscape-meta-row .lyrics-landscape-track-info {
+    display: flex !important;
+    flex-direction: column !important;
+    text-align: left !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    padding-left: 0.15rem !important;
+    box-sizing: border-box !important;
+  }
+
+  .lyrics-landscape-track-title {
+    font-family: inherit !important;
+    font-size: clamp(1rem, 2vw, 1.45rem) !important;
+    font-weight: 600 !important;
+    line-height: 1.2 !important;
+    color: #ffffff !important;
+    display: -webkit-box !important;
+    -webkit-line-clamp: 2 !important;
+    line-clamp: 2 !important;
+    -webkit-box-orient: vertical !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    word-break: break-word !important;
+    overflow-wrap: break-word !important;
+    width: 100% !important;
+    cursor: pointer !important;
+    transition: color 0.18s ease, text-shadow 0.18s ease !important;
+  }
+
+  .lyrics-landscape-track-title:hover {
+    color: #38bdf8 !important;
+    text-shadow: 0 0 16px rgba(56, 189, 248, 0.4) !important;
+  }
+
+  .lyrics-landscape-track-artist {
+    font-family: inherit !important;
+    font-size: clamp(0.82rem, 1.4vw, 1rem) !important;
+    font-weight: 400 !important;
+    color: rgba(226, 232, 240, 0.72) !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    margin-top: 0.35rem !important;
+    width: 100% !important;
+  }
+
+  /* Right Column: Lyrics View (50% of total width) */
+  .lyrics-landscape-right-box {
+    display: flex !important;
+    flex-direction: column !important;
+    flex: 0 0 50% !important;
+    width: 50% !important;
+    max-width: 50% !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    justify-content: flex-start !important;
+    padding: clamp(0.5rem, 1.5vh, 1.5rem) clamp(1rem, 2.5vw, 3rem) clamp(0.5rem, 1.5vh, 1rem) clamp(1rem, 2.5vw, 2.5rem) !important;
+    box-sizing: border-box !important;
+  }
+
+  .lyrics-landscape-header {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    gap: 0.4rem !important;
+    padding-bottom: 0.5rem !important;
+    flex: 0 0 auto !important;
+  }
+
+  /* Bottom Bar: Centered Across Full Layout */
+  .lyrics-bottom-bar {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 100% !important;
+    max-width: 960px !important;
+    margin: 0 auto !important;
+    flex: 0 0 auto !important;
+    padding-top: clamp(0.4rem, 1vh, 0.8rem) !important;
+    padding-bottom: clamp(1rem, 2.5vh, 1.8rem) !important;
+  }
+
+  .lyrics-bottom-bar .player-controls {
+    width: min(100%, 760px) !important;
+    justify-content: center !important;
+    gap: clamp(0.5rem, 1.8vw, 1.25rem) !important;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   LYRICS SCROLLING VIEW (Identical in both Landscape and Portrait)
+───────────────────────────────────────────────────────────────────────────── */
+.lyrics-scroll-pane {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  width: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: clamp(1.2rem, 3vh, 2.2rem) 0.5rem clamp(3rem, 6vh, 4.5rem);
+  scroll-behavior: auto;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 10%, black 82%, transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0%, black 10%, black 82%, transparent 100%);
+  display: flex;
+  flex-direction: column;
+  user-select: text;
+  font-family: inherit;
+}
+
+.lyrics-scroll-pane::-webkit-scrollbar {
+  width: 5px;
+}
+.lyrics-scroll-pane::-webkit-scrollbar-track {
+  background: transparent;
+}
+.lyrics-scroll-pane::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+}
+.lyrics-scroll-pane::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.lyric-item {
+  font-family: inherit;
+  padding: clamp(0.52rem, 1.2vh, 0.9rem) 0.45rem;
+  margin-block: clamp(0.2rem, 0.45vh, 0.38rem);
+  border-radius: 0.75rem;
+  font-size: clamp(1.36rem, 2.5vw, 1.95rem);
+  font-weight: 600;
+  line-height: 1.36;
+  color: rgba(255, 255, 255, 0.36);
+  cursor: pointer;
+  background: transparent;
+  transform: scale(1) translateZ(0);
+  transform-origin: left center;
+  text-align: left;
+  filter: blur(0.3px);
+  transition:
+    color 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+    text-shadow 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+    filter 0.38s ease;
+  will-change: transform, color, text-shadow;
+}
+
+.lyric-item:hover {
+  color: rgba(255, 255, 255, 0.85);
+  filter: blur(0px);
+}
+
+.lyric-item.is-active {
+  font-family: inherit !important;
+  color: #00f2fe !important;
+  font-size: clamp(1.52rem, 3vw, 2.25rem) !important;
+  font-weight: 700 !important;
+  line-height: 1.32 !important;
+  transform: scale(1.045) translateZ(0) !important;
+  filter: blur(0px) !important;
+  text-shadow:
+    0 0 16px rgba(0, 242, 254, 0.65),
+    0 0 36px rgba(0, 242, 254, 0.35),
+    0 2px 10px rgba(0, 0, 0, 0.85) !important;
+}
+
+.lyric-item.is-past {
+  font-family: inherit;
+  color: rgba(255, 255, 255, 0.32);
+  filter: blur(0.2px);
+}
+
+/* 3-dots animated instrumental intro/break */
+.lyrics-dots-break {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.8rem;
+  letter-spacing: 0.1em;
+  color: rgba(255, 255, 255, 0.6);
+  transition: color 0.45s cubic-bezier(0.16, 1, 0.3, 1), text-shadow 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.lyric-item.is-active .lyrics-dots-break {
+  color: #00f2fe !important;
+  text-shadow: 0 0 18px rgba(0, 242, 254, 0.75) !important;
+}
+}
+
+.lyrics-dots-break span {
+  display: inline-block;
+  animation: lyricDotPulse 1.4s ease-in-out infinite alternate;
+}
+.lyrics-dots-break span:nth-child(2) { animation-delay: 0.25s; }
+.lyrics-dots-break span:nth-child(3) { animation-delay: 0.5s; }
+
+@keyframes lyricDotPulse {
+  from { opacity: 0.3; transform: scale(0.85); }
+  to { opacity: 1; transform: scale(1.18); }
+}
+
+.lyrics-attribution {
+  margin-top: 2rem;
+  padding: 1.25rem 0.4rem 0.5rem;
+  text-align: left;
+}
+
+.lyrics-attribution a {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.48);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.lyrics-attribution a:hover {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* Action button pill */
+.lyrics-pill-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.28rem 0.65rem;
+  font-size: 0.74rem;
+  font-weight: 600;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  cursor: pointer;
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.lyrics-pill-btn:hover {
+  background: rgba(255, 255, 255, 0.22);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.35);
+  transform: translateY(-1px);
+}
+
+.lyrics-pill-btn:active {
+  transform: scale(0.96);
+}
+
+/* Rounded icon-only action button */
+.lyrics-icon-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 2.15rem !important;
+  height: 2.15rem !important;
+  min-width: 2.15rem !important;
+  min-height: 2.15rem !important;
+  aspect-ratio: 1 / 1 !important;
+  padding: 0 !important;
+  border-radius: 50% !important;
+  background: rgba(255, 255, 255, 0.1) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  cursor: pointer !important;
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+  flex-shrink: 0 !important;
+  flex-grow: 0 !important;
+}
+
+.lyrics-icon-btn svg {
+  stroke: #ffffff !important;
+  color: #ffffff !important;
+  width: 15px !important;
+  height: 15px !important;
+  flex-shrink: 0 !important;
+  display: block !important;
+}
+
+.lyrics-icon-btn:hover {
+  background: rgba(255, 255, 255, 0.22) !important;
+  border-color: rgba(255, 255, 255, 0.35) !important;
+  transform: scale(1.08);
+}
+
+.lyrics-icon-btn:active {
+  transform: scale(0.92);
+}
+
+/* Manual Search Wrap & Blurry Frosted Glass Box */
+.lyrics-search-box-wrap {
+  position: relative;
+  width: 100%;
+  margin-bottom: 0.75rem;
+  z-index: 40;
+}
+
+.lyrics-search-form {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.6rem;
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-radius: 0.85rem;
+  border: 1px solid rgba(255, 255, 255, 0.22) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(180%) !important;
+  backdrop-filter: blur(28px) saturate(180%) !important;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.15) !important;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.lyrics-search-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.48rem 0.85rem;
+  font-size: 0.88rem;
+  font-family: inherit;
+  color: #ffffff !important;
+  background: rgba(0, 0, 0, 0.25) !important;
+  border: 1px solid rgba(255, 255, 255, 0.16) !important;
+  border-radius: 0.6rem;
+  outline: none;
+  transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+}
+
+.lyrics-search-input:focus {
+  border-color: #00f2fe !important;
+  background: rgba(0, 0, 0, 0.38) !important;
+  box-shadow: 0 0 12px rgba(0, 242, 254, 0.35) !important;
+}
+
+.lyrics-search-input::placeholder {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+/* Icon-only Search Submit Button */
+.lyrics-search-icon-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 2.25rem !important;
+  height: 2.25rem !important;
+  flex: 0 0 2.25rem !important;
+  border-radius: 50% !important;
+  background: #0284c7 !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.25) !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+  padding: 0 !important;
+  box-shadow: 0 4px 12px rgba(2, 132, 199, 0.4) !important;
+}
+
+.lyrics-search-icon-btn:hover {
+  background: #0369a1 !important;
+  transform: scale(1.06) !important;
+  box-shadow: 0 6px 16px rgba(2, 132, 199, 0.6) !important;
+}
+
+.lyrics-search-icon-btn:active {
+  transform: scale(0.94) !important;
+}
+
+.lyrics-search-icon-btn:disabled {
+  opacity: 0.65 !important;
+  cursor: not-allowed !important;
+}
+
+/* Icon-only Close Button */
+.lyrics-search-close-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 2.25rem !important;
+  height: 2.25rem !important;
+  flex: 0 0 2.25rem !important;
+  border-radius: 50% !important;
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: rgba(255, 255, 255, 0.8) !important;
+  border: 1px solid rgba(255, 255, 255, 0.16) !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+  padding: 0 !important;
+}
+
+.lyrics-search-close-btn:hover {
+  background: rgba(255, 255, 255, 0.18) !important;
+  color: #ffffff !important;
+  transform: scale(1.06) !important;
+}
+
+.lyrics-search-close-btn:active {
+  transform: scale(0.94) !important;
+}
+
+/* LRCLIB Results Dropdown with Frosted Blurry Glass Look */
+.lyrics-search-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  max-height: 280px;
+  background: rgba(15, 23, 42, 0.78) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(180%) !important;
+  backdrop-filter: blur(28px) saturate(180%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  border-radius: 0.85rem !important;
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.6) !important;
+  overflow-y: auto;
+  overflow-x: hidden;
+  z-index: 60;
+  animation: lyricsDropdownFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes lyricsDropdownFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.lyrics-search-dropdown::-webkit-scrollbar {
+  width: 6px;
+}
+.lyrics-search-dropdown::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+}
+
+.lyrics-dropdown-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  padding: 1.25rem 1rem;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.86rem;
+}
+
+.lyrics-dropdown-results {
+  display: flex;
+  flex-direction: column;
+  padding: 0.35rem;
+}
+
+.lyrics-dropdown-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: 0.55rem;
+  cursor: pointer;
+  transition: background 0.16s ease, transform 0.16s ease;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: inherit;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.lyrics-dropdown-item:hover,
+.lyrics-dropdown-item:focus-visible {
+  background: rgba(255, 255, 255, 0.12);
+  outline: none;
+}
+
+.lyrics-dropdown-item-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.lyrics-dropdown-item-title {
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lyrics-dropdown-item-sub {
+  font-size: 0.76rem;
+  color: rgba(226, 232, 240, 0.68);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
+}
+
+.lyrics-dropdown-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.lyrics-dropdown-dur {
+  font-size: 0.76rem;
+  color: rgba(255, 255, 255, 0.5);
+  font-variant-numeric: tabular-nums;
+}
+
+.lyrics-dropdown-badge {
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 9999px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.lyrics-badge-synced {
+  background: rgba(0, 242, 254, 0.18);
+  color: #00f2fe;
+  border: 1px solid rgba(0, 242, 254, 0.45);
+}
+
+.lyrics-badge-inst {
+  background: rgba(168, 85, 247, 0.18);
+  color: #c084fc;
+  border: 1px solid rgba(168, 85, 247, 0.4);
+}
+
+.lyrics-badge-plain {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* Empty / Loading States */
+.lyrics-center-message {
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 2.5rem 1.5rem;
+  max-width: 440px;
+}
+
+.lyrics-spinner {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, 0.2);
+  border-top-color: #ffffff;
+  animation: spin 0.85s linear infinite;
+  margin-bottom: 1.25rem;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   BOTTOM CONTROLLERS: Spacious, Uncramped Layout
+───────────────────────────────────────────────────────────────────────────── */
+.lyrics-bottom-bar {
+  flex: 0 0 auto !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+  z-index: 20;
+}
+
+.lyrics-bottom-bar .player-timeline {
+  width: 100% !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: clamp(0.6rem, 1.5vw, 1rem) !important;
+  margin-block: clamp(0.45rem, 1.2vh, 0.9rem) !important;
+}
+
+.lyrics-bottom-bar .player-time {
+  font-size: clamp(0.82rem, 1.15vw, 0.94rem) !important;
+  font-weight: 600 !important;
+  color: rgba(255, 255, 255, 0.72) !important;
+  font-variant-numeric: tabular-nums !important;
+  min-width: 42px !important;
+  text-align: center !important;
+}
+
+.lyrics-bottom-bar .player-controls {
+  width: 100% !important;
+  display: flex !important;
+  align-items: center !important;
+  margin-top: clamp(0.5rem, 1.5vh, 1.1rem) !important;
+  padding-bottom: clamp(0.25rem, 0.8vh, 0.6rem) !important;
+  --play-btn-size: clamp(3.2rem, 6vw, 4.3rem);
+  --media-icon-size: calc(var(--play-btn-size) * 0.4);
+}
+
+/* Big Hero Play/Pause Button - Matching Normal Fullscreen Player */
+.lyrics-bottom-bar .player-controls .play-main,
+.lyrics-bottom-bar #play-pause {
+  width: var(--play-btn-size) !important;
+  height: var(--play-btn-size) !important;
+  min-width: var(--play-btn-size) !important;
+  min-height: var(--play-btn-size) !important;
+  padding: 0 !important;
+  border-radius: 50% !important;
+  background: #22c55e !important;
+  color: #022c22 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  box-shadow: 0 10px 24px rgba(34, 197, 94, 0.45) !important;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease !important;
+  flex-shrink: 0 !important;
+  margin-inline: clamp(0.2rem, 0.8vw, 0.5rem) !important;
+}
+
+.lyrics-bottom-bar .player-controls .play-main:hover,
+.lyrics-bottom-bar #play-pause:hover {
+  transform: scale(1.06) !important;
+  box-shadow: 0 12px 32px rgba(34, 197, 94, 0.65) !important;
+  background: #16a34a !important;
+}
+
+.lyrics-bottom-bar .player-controls .play-main:active,
+.lyrics-bottom-bar #play-pause:active {
+  transform: scale(0.96) !important;
+}
+
+/* Secondary control buttons - Matching Normal Fullscreen Player */
+.lyrics-bottom-bar .player-controls .icon-button,
+.lyrics-bottom-bar .player-controls button:not(.play-main):not(#play-pause) {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: clamp(2.35rem, 5vw, 3.4rem) !important;
+  height: clamp(2.35rem, 5vw, 3.4rem) !important;
+  min-width: clamp(2.35rem, 5vw, 3.4rem) !important;
+  min-height: clamp(2.35rem, 5vw, 3.4rem) !important;
+  padding: 0 !important;
+  border-radius: 50% !important;
+  color: rgba(255, 255, 255, 0.85) !important;
+  background: transparent !important;
+  border: none !important;
+  cursor: pointer !important;
+  transition: color 0.15s ease, transform 0.15s ease, background 0.15s ease !important;
+  flex-shrink: 0 !important;
+}
+
+.lyrics-bottom-bar .player-controls .icon-button:hover,
+.lyrics-bottom-bar .player-controls button:not(.play-main):not(#play-pause):hover {
+  color: #ffffff !important;
+  background: rgba(255, 255, 255, 0.14) !important;
+  transform: scale(1.08) !important;
+}
+
+.lyrics-bottom-bar .player-controls .icon-button:active,
+.lyrics-bottom-bar .player-controls button:not(.play-main):not(#play-pause):active {
+  transform: scale(0.94) !important;
+}
+
+/* Play/pause icon and all other media icons: exactly 40% of play/pause button */
+.lyrics-bottom-bar .player-controls svg,
+.lyrics-bottom-bar .player-controls .icon-button:not(.play-main) svg,
+.lyrics-bottom-bar .player-controls .media-icon-wrapper svg {
+  width: var(--media-icon-size) !important;
+  height: var(--media-icon-size) !important;
+}
+
+.lyrics-bottom-bar .player-controls .play-main svg,
+.lyrics-bottom-bar #play-pause svg {
+  width: var(--media-icon-size) !important;
+  height: var(--media-icon-size) !important;
+  fill: currentColor !important;
+  stroke: none !important;
+}
+
+.lyrics-bottom-bar .player-controls .toggle-active {
+  color: #38bdf8 !important;
+}
+
+/* Matching responsive.css for large desktop screens (>=1500px, >=820px) */
+@media (orientation: landscape) and (min-width: 1500px) and (min-height: 820px) {
+  .lyrics-bottom-bar .player-controls {
+    --play-btn-size: 4rem;
+    --media-icon-size: calc(var(--play-btn-size) * 0.4);
+  }
+  .lyrics-bottom-bar .player-controls .icon-button:not(.play-main) {
+    width: 3.2rem !important;
+    height: 3.2rem !important;
+  }
+  .lyrics-bottom-bar .player-controls .icon-button.play-main {
+    width: var(--play-btn-size) !important;
+    height: var(--play-btn-size) !important;
+  }
+}
+
+/* Mobile responsive adjustments */
+@media (max-width: 480px) {
+  .lyrics-bottom-bar .player-controls {
+    --play-btn-size: 2.85rem;
+    --media-icon-size: calc(var(--play-btn-size) * 0.4);
+  }
+  .lyrics-bottom-bar .player-controls .icon-button:not(.play-main) {
+    width: 2.1rem !important;
+    height: 2.1rem !important;
+  }
+  .lyrics-bottom-bar .player-controls .icon-button.play-main {
+    width: var(--play-btn-size) !important;
+    height: var(--play-btn-size) !important;
+  }
+}
