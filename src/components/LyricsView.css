@@ -781,7 +781,6 @@
   color: #00f2fe !important;
   text-shadow: 0 0 18px rgba(0, 242, 254, 0.75) !important;
 }
-}
 
 .lyrics-dots-break span {
   display: inline-block;
@@ -1042,6 +1041,13 @@
   font-size: 0.86rem;
 }
 
+.lyrics-search-spinner {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+
 .lyrics-dropdown-results {
   display: flex;
   flex-direction: column;
@@ -1148,14 +1154,22 @@
   max-width: 440px;
 }
 
-.lyrics-spinner {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  border: 3px solid rgba(255, 255, 255, 0.2);
-  border-top-color: #ffffff;
-  animation: spin 0.85s linear infinite;
-  margin-bottom: 1.25rem;
+.lyrics-center-message--loading {
+  gap: 0.9rem;
+  width: min(100%, 28rem);
+}
+
+.lyrics-loader {
+  display: block;
+  flex: 0 0 auto;
+  line-height: 0;
+}
+
+.lyrics-loading-copy {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 0.96rem;
+  line-height: 1.45;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
@@ -1280,7 +1294,7 @@
 }
 
 /* Matching responsive.css for large desktop screens (>=1500px, >=820px) */
-@media (orientation: landscape) and (min-width: 1500px) and (min-height: 820px) {
+@media (orientation: landscape) and (min-aspect-ratio: 1.2 / 1) and (min-width: 1500px) and (min-height: 820px) {
   .lyrics-bottom-bar .player-controls {
     --play-btn-size: 4rem;
     --media-icon-size: calc(var(--play-btn-size) * 0.4);

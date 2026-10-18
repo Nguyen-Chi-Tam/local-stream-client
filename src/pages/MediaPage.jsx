@@ -181,7 +181,9 @@ export default function MediaPage({
   const [currentIndex, setCurrentIndex] = useState(-1);
   const [isShuffle, setIsShuffle] = useState(() => loadSettings().isShuffle ?? false);
   const [isRepeat, setIsRepeat] = useState(() => loadSettings().isRepeat ?? false);
-  const [isPlayerFullscreen, setIsPlayerFullscreen] = useState(() => loadSettings().isPlayerFullscreen ?? false);
+  // Fullscreen is a transient view. Restoring it can unexpectedly open the
+  // fullscreen player as soon as the first track is selected.
+  const [isPlayerFullscreen, setIsPlayerFullscreen] = useState(false);
   const audioRef = useRef(null);
   const {
     isPlaying,
@@ -534,9 +536,6 @@ export default function MediaPage({
   useEffect(() => { saveSettings({ isShuffle }); }, [isShuffle]);
   useEffect(() => { saveSettings({ isRepeat }); }, [isRepeat]);
   useEffect(() => { saveSettings({ hiddenFolders }); }, [hiddenFolders]);
-  useEffect(() => { saveSettings({ isPlayerFullscreen }); }, [isPlayerFullscreen]);
-
-
   // Manage history state for search mode on mobile
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -681,11 +680,15 @@ export default function MediaPage({
     setCurrentTime(0);
     setBufferedTime(0);
 
-    const isMiniPhone = window.innerWidth <= 380 || window.innerHeight < 700;
-    if (isActivePage && isMiniPhone && !currentlyPlaying && !miniPlayerAutoOpenedRef.current) {
+    // The compact docked player is used on phone-sized viewports. On the
+    // first selection, open its full player instead of leaving the user in
+    // the constrained mini-player view. Larger layouts stay docked.
+    const isMiniPlayerLayout = window.innerWidth <= 640 || window.innerHeight < 700;
+    if (isActivePage && isMiniPlayerLayout && !currentlyPlaying && !miniPlayerAutoOpenedRef.current) {
       miniPlayerAutoOpenedRef.current = true;
       setPlayerFullscreen(true);
     }
+
   }
 
   // Play by index within the active playlist (or fallback to sortedAllItems).

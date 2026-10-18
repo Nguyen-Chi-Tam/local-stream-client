@@ -246,6 +246,31 @@ export function extractTitleFromPath(path) {
   return fileNameWithExt;
 }
 
+const YOUTUBE_JUNK_TAG =
+  '(?:official\\s*(?:music\\s*)?(?:video|audio|mv|m/v)?|music\\s*video|m/?v|lyrics?|lyric\\s*video|audio|karaoke|visualizer|performance|full\\s*hd|\\d{3,4}p|\\d{1,2}k|hd|uhd|4k|8k|remaster(?:ed)?|vietsub|engsub)';
+
+export function cleanYouTubeTitle(title) {
+  if (!title || typeof title !== 'string') return '';
+
+  let clean = title
+    .replace(/\.(?:mp3|flac|wav|m4a|aac|ogg|opus|wma|mp4|mkv|webm|avi)\b/gi, '')
+    .replace(/\s*[\[(][^()\[\]]*(?:official|music\s*video|m\/?v|lyrics?|audio|karaoke|visualizer|performance|full\s*hd|\d{3,4}p|\d{1,2}k|hd|uhd|4k|8k|remaster|vietsub|engsub)[^()\[\]]*[\])]/gi, '')
+    .trim();
+
+  const suffixPattern = new RegExp(
+    `\\s*(?:[|/\\\\•–—~:]|\\s+-\\s+)\\s*${YOUTUBE_JUNK_TAG}(?:\\s*[|/\\\\•–—~:]?\\s*${YOUTUBE_JUNK_TAG})*\\s*$`,
+    'i',
+  );
+
+  let previous;
+  do {
+    previous = clean;
+    clean = clean.replace(suffixPattern, '').trim();
+  } while (clean !== previous);
+
+  return clean.replace(/[\s|/\\•–—~:]+$/, '').replace(/\s+/g, ' ').trim();
+}
+
 export function pickTitle(item) {
   if (!item) return 'Untitled';
 
@@ -265,11 +290,12 @@ export function pickTitle(item) {
   const cleanFromPath = fromPath
     ? fromPath.replace(/\s*\([^)]*_(?:\d+K|\d+KB|\d+MB)\)\s*$/i, '').trim()
     : '';
+  const normalizedPathTitle = cleanYouTubeTitle(cleanFromPath);
 
   if (isImage) {
-    if (cleanFromPath) return cleanFromPath;
+    if (normalizedPathTitle) return normalizedPathTitle;
     const raw = item.title || item.name || item.fileName || item.filename || '';
-    return String(raw).trim() || 'Untitled';
+    return cleanYouTubeTitle(String(raw).trim()) || 'Untitled';
   }
 
   const raw = item.title || item.name || item.fileName || item.filename || '';
@@ -282,20 +308,20 @@ export function pickTitle(item) {
 
   if (rawIsGarbled || !rawText) {
     if (cleanFromPath && !isMojibake(cleanFromPath)) {
-      return cleanFromPath;
+      return normalizedPathTitle;
     }
     const decoded = decodeMojibakeString(rawText);
     if (decoded && decoded !== rawText && !isMojibake(decoded)) {
       text = decoded;
     } else if (cleanFromPath) {
-      return cleanFromPath;
+      return normalizedPathTitle;
     }
   } else {
     const decoded = decodeMojibakeString(rawText);
     if (decoded && decoded !== rawText) {
       if (isMojibake(decoded) || (cleanFromPath && isSilentlyStripped(decoded, cleanFromPath, artist))) {
         if (cleanFromPath && !isMojibake(cleanFromPath)) {
-          return cleanFromPath;
+          return normalizedPathTitle;
         }
       } else {
         text = decoded;
@@ -305,19 +331,19 @@ export function pickTitle(item) {
 
   if (!text || isMojibake(text) || (cleanFromPath && isSilentlyStripped(text, cleanFromPath, artist))) {
     if (cleanFromPath && !isMojibake(cleanFromPath)) {
-      return cleanFromPath;
+      return normalizedPathTitle;
     }
   }
 
-  text = text.replace(/\s*\([^)]*_(?:\d+K|\d+KB|\d+MB)\)\s*$/i, '').trim();
+  text = cleanYouTubeTitle(text.replace(/\s*\([^)]*_(?:\d+K|\d+KB|\d+MB)\)\s*$/i, '').trim());
   text = text.replace(/(\w)Ž(?=\s|$)/g, '$1®');
   text = text.replace(/[\uFEFF\uFFFD]/g, '').trim();
 
   if (!text || isMojibake(text)) {
-    if (cleanFromPath) return cleanFromPath;
+    if (normalizedPathTitle) return normalizedPathTitle;
   }
 
-  return text || cleanFromPath || 'Untitled';
+  return text || normalizedPathTitle || 'Untitled';
 }
 
 export function isUnknownArtist(text) {

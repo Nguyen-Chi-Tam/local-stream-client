@@ -1010,7 +1010,7 @@
 }
 
 /* Fullscreen Music Player: TV and Ultra Large Display optimization */
-@media (orientation: landscape) and (min-width: 1500px) and (min-height: 820px) {
+@media (orientation: landscape) and (min-aspect-ratio: 1.2 / 1) and (min-width: 1500px) and (min-height: 820px) {
     .music-player-active #player:not(.has-lyrics-open) .player-content {
         max-width: 1400px;
         grid-template-columns: 1fr 1.6fr;

@@ -6,6 +6,7 @@ import PhotoPage from './pages/PhotoPage.jsx';
 import QueueToast from './components/QueueToast.jsx';
 import { clearMediaCache } from './functions/mediaApiCache.js';
 import { pickTitle, pickArtist } from './functions/mediaUtils.js';
+import { clearSelectedLyrics } from './functions/lyricsService.js';
 
 const STORAGE_KEY = 'localstream_server_url';
 const BASE_URL = (import.meta.env.BASE_URL || '/').replace(/\/+$/, '');
@@ -147,6 +148,7 @@ export default function App() {
       }
     } catch {}
     clearMediaCache();
+    clearSelectedLyrics();
     setActivePlaybackType(null);
     setServerUrl('');
     navigate('/');

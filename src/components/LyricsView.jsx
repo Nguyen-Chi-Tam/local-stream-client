@@ -13,10 +13,10 @@ import {
   Disc,
   ZoomIn,
   ZoomOut,
-  Loader2,
 } from 'lucide-react';
 import { MorphIcon } from 'morphicons/react';
 import { Play as MorphPlay, Pause as MorphPause } from 'lucide';
+import { ClipLoader } from 'react-spinners';
 import AnimatedMediaButton from './AnimatedMediaButton.jsx';
 import {
   fetchLyrics,
@@ -26,6 +26,8 @@ import {
   formatCandidateResult,
   saveSessionLyrics,
   getSessionLyrics,
+  saveSelectedLyrics,
+  getSelectedLyrics,
 } from '../functions/lyricsService.js';
 import './LyricsView.css';
 
@@ -79,6 +81,7 @@ export default function LyricsView({
   const [isSearching, setIsSearching] = useState(false);
   const searchDebounceRef = useRef(null);
   const searchContainerRef = useRef(null);
+  const lyricsRequestRef = useRef(0);
 
   const lyricsScrollRef = useRef(null);
   const lineRefs = useRef([]);
@@ -104,10 +107,29 @@ export default function LyricsView({
   // ── 1. Fetch Lyrics on track change ──────────────────────────────────────────────
   const loadLyrics = useCallback(async (title, artist, duration, forceRefresh = false) => {
     if (!title) return;
+    const requestId = lyricsRequestRef.current + 1;
+    lyricsRequestRef.current = requestId;
+    const isCurrentRequest = () => lyricsRequestRef.current === requestId;
 
     if (!forceRefresh) {
+      const selectedLyrics = getSelectedLyrics(title, artist);
+      if (selectedLyrics && (selectedLyrics.lines?.length > 0 || selectedLyrics.instrumental)) {
+        if (!isCurrentRequest()) return;
+        setLyricsData({
+          loading: false,
+          synced: Boolean(selectedLyrics.synced),
+          lines: selectedLyrics.lines || [],
+          instrumental: Boolean(selectedLyrics.instrumental),
+          error: selectedLyrics.error || null,
+          trackName: cleanTrackTitle(selectedLyrics.trackName) || selectedLyrics.trackName || title,
+          artistName: selectedLyrics.artistName || artist,
+        });
+        return;
+      }
+
       const sessionCached = getSessionLyrics(title, artist);
       if (sessionCached && (sessionCached.lines?.length > 0 || sessionCached.instrumental)) {
+        if (!isCurrentRequest()) return;
         setLyricsData({
           loading: false,
           synced: Boolean(sessionCached.synced),
@@ -124,6 +146,7 @@ export default function LyricsView({
     setLyricsData((prev) => ({ ...prev, loading: true, error: null }));
     try {
       const res = await fetchLyrics(title, artist, duration, forceRefresh);
+      if (!isCurrentRequest()) return;
       if (res) {
         const cleanName = cleanTrackTitle(res.trackName) || res.trackName || title;
         const resultData = {
@@ -149,6 +172,7 @@ export default function LyricsView({
         });
       }
     } catch (err) {
+      if (!isCurrentRequest()) return;
       setLyricsData({
         loading: false,
         synced: false,
@@ -164,7 +188,19 @@ export default function LyricsView({
   useEffect(() => {
     if (!currentlyPlaying) return;
     const parsed = parseTrackAndArtist(currentTitle, currentArtist);
-    setSearchQuery(parsed.title || cleanTrackTitle(currentTitle));
+    const mediaTitle = cleanTrackTitle(currentTitle) || parsed.title;
+    const mediaArtist = currentArtist || parsed.artist;
+    lyricsRequestRef.current += 1;
+    setLyricsData({
+      loading: true,
+      synced: false,
+      lines: [],
+      instrumental: false,
+      error: null,
+      trackName: mediaTitle,
+      artistName: mediaArtist,
+    });
+    setSearchQuery([currentTitle, currentArtist].filter(Boolean).join(' ') || parsed.title || cleanTrackTitle(currentTitle));
     setIsManualSearchOpen(false);
     setSearchResults(null);
     lineRefs.current = [];
@@ -328,8 +364,8 @@ export default function LyricsView({
         artistName: formatted.artistName,
       };
       setLyricsData(resultData);
-      // Cache this lyric for current track across the session so leaving and re-entering preserves it
-      saveSessionLyrics(currentTitle, currentArtist, resultData);
+      // Explicit user selections persist until the server is disconnected.
+      saveSelectedLyrics(currentTitle, currentArtist, resultData);
     }
     setIsManualSearchOpen(false);
     setSearchResults(null);
@@ -341,7 +377,7 @@ export default function LyricsView({
     setIsManualSearchOpen((prev) => {
       const next = !prev;
       if (next) {
-        const initial = searchQuery || displayTitle || cleanTrackTitle(currentTitle);
+        const initial = searchQuery || [currentTitle, currentArtist].filter(Boolean).join(' ') || displayTitle || cleanTrackTitle(currentTitle);
         setSearchQuery(initial);
         if (initial) {
           performSearch(initial);
@@ -432,9 +468,15 @@ export default function LyricsView({
       onWheel={handleUserScroll}
     >
       {lyricsData.loading ? (
-        <div className="lyrics-center-message select-none">
-          <div className="lyrics-spinner" />
-          <p style={{ fontSize: '0.96rem', color: 'rgba(255, 255, 255, 0.78)', margin: 0 }}>
+        <div className="lyrics-center-message lyrics-center-message--loading select-none" role="status">
+          <ClipLoader
+            className="lyrics-loader"
+            color="#36d7b7"
+            size={36}
+            speedMultiplier={0.9}
+            aria-label="Loading lyrics"
+          />
+          <p className="lyrics-loading-copy">
             Fetching lyrics for <strong>{displayTitle}</strong>…
           </p>
         </div>
@@ -456,7 +498,7 @@ export default function LyricsView({
               onClick={toggleManualSearch}
               style={{ padding: '0.55rem 1.1rem', fontSize: '0.85rem' }}
             >
-              <Search size={14} /> Search manually on LRCLIB
+              <Search size={14} /> Search lyrics manually
             </button>
           )}
         </div>
@@ -701,7 +743,7 @@ export default function LyricsView({
             <button
               type="button"
               className="lyrics-icon-btn"
-              title="Search lyrics on LRCLIB"
+              title="Search lyrics"
               onClick={toggleManualSearch}
             >
               <Search size={15} />
@@ -812,7 +854,7 @@ export default function LyricsView({
               <button
                 type="button"
                 className="lyrics-icon-btn"
-                title="Search lyrics on LRCLIB"
+              title="Search lyrics"
                 onClick={toggleManualSearch}
               >
                 <Search size={15} />
@@ -847,7 +889,7 @@ export default function LyricsView({
                     disabled={isSearching}
                   >
                     {isSearching ? (
-                      <Loader2 size={16} className="animate-spin" />
+                      <ClipLoader className="lyrics-search-spinner" color="#36d7b7" size={16} />
                     ) : (
                       <Search size={16} />
                     )}
@@ -866,17 +908,17 @@ export default function LyricsView({
                   </button>
                 </form>
 
-                {/* LRCLIB Results Dropdown */}
+                {/* Lyrics search results */}
                 {(isSearching || searchResults !== null) && (
                   <div className="lyrics-search-dropdown select-none">
                     {isSearching ? (
                       <div className="lyrics-dropdown-status select-none">
-                        <Loader2 size={15} className="animate-spin" />
-                        <span>Searching LRCLIB…</span>
+                        <ClipLoader className="lyrics-search-spinner" color="#36d7b7" size={15} />
+                        <span>Searching lyrics…</span>
                       </div>
                     ) : searchResults && searchResults.length === 0 ? (
                       <div className="lyrics-dropdown-status select-none">
-                        <span>No results found on LRCLIB</span>
+                        <span>No matching lyrics found. Try the song title or another spelling.</span>
                       </div>
                     ) : searchResults && (
                       <div className="lyrics-dropdown-results select-none">
