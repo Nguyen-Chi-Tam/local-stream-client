@@ -87,6 +87,7 @@ export default function LyricsView({
   const lineRefs = useRef([]);
   const userScrollingRef = useRef(false);
   const userScrollTimeoutRef = useRef(null);
+  const scrollAnimRef = useRef(null);
 
   // Timeline Scrubbing Refs
   const playedRef = useRef(null);
@@ -238,7 +239,55 @@ export default function LyricsView({
   }, [lyricsData.lines, currentActiveLyricIndex, audioRef, currentTime]);
 
   // ── 3. Smooth Auto-Scroll with User Interaction Detection ───────────────────────
+  const stopScrollAnimation = useCallback(() => {
+    if (scrollAnimRef.current) {
+      cancelAnimationFrame(scrollAnimRef.current);
+      scrollAnimRef.current = null;
+    }
+  }, []);
+
+  // Custom eased scroll. Unlike native `behavior: 'smooth'` (fixed duration,
+  // cannot be redirected or interrupted), this picks up from the current
+  // scrollTop on every line change, so consecutive jumps feel continuous.
+  const animateScrollTo = useCallback(
+    (targetTop) => {
+      const container = lyricsScrollRef.current;
+      if (!container) return;
+      stopScrollAnimation();
+      const maxY = container.scrollHeight - container.clientHeight;
+      const endTop = Math.max(0, Math.min(targetTop, maxY));
+      const startTop = container.scrollTop;
+      const delta = endTop - startTop;
+      if (Math.abs(delta) < 0.5) return;
+
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        container.style.scrollBehavior = 'auto';
+        container.scrollTop = endTop;
+        container.style.scrollBehavior = '';
+        return;
+      }
+
+      // Short hops snap quickly; long catch-ups get a little more time
+      const duration = Math.min(640, 300 + Math.abs(delta) * 0.22);
+      const startTime = performance.now();
+      const easeOutQuint = (t) => 1 - Math.pow(1 - t, 5);
+      const step = (now) => {
+        const p = Math.min(1, (now - startTime) / duration);
+        container.scrollTop = startTop + delta * easeOutQuint(p);
+        if (p < 1) {
+          scrollAnimRef.current = requestAnimationFrame(step);
+        } else {
+          scrollAnimRef.current = null;
+        }
+      };
+      scrollAnimRef.current = requestAnimationFrame(step);
+    },
+    [stopScrollAnimation],
+  );
+
   const handleUserScroll = () => {
+    // Real interaction (wheel / touch drag) always wins over the auto-scroll animation
+    stopScrollAnimation();
     userScrollingRef.current = true;
     if (userScrollTimeoutRef.current) clearTimeout(userScrollTimeoutRef.current);
     userScrollTimeoutRef.current = setTimeout(() => {
@@ -246,18 +295,17 @@ export default function LyricsView({
     }, 3500);
   };
 
+  useEffect(() => () => stopScrollAnimation(), [stopScrollAnimation]);
+
   useEffect(() => {
     if (userScrollingRef.current) return;
     if (currentActiveLyricIndex >= 0 && lineRefs.current[currentActiveLyricIndex] && lyricsScrollRef.current) {
       const container = lyricsScrollRef.current;
       const activeEl = lineRefs.current[currentActiveLyricIndex];
       const targetTop = activeEl.offsetTop - (container.clientHeight / 2) + (activeEl.clientHeight / 2);
-      container.scrollTo({
-        top: Math.max(0, targetTop),
-        behavior: 'smooth',
-      });
+      animateScrollTo(targetTop);
     }
-  }, [currentActiveLyricIndex]);
+  }, [currentActiveLyricIndex, animateScrollTo]);
 
   // ── Keyboard shortcut: Escape exits search or lyrics ────────────────────────────
   useEffect(() => {
@@ -401,10 +449,7 @@ export default function LyricsView({
       const container = lyricsScrollRef.current;
       const activeEl = lineRefs.current[currentActiveLyricIndex];
       const targetTop = activeEl.offsetTop - (container.clientHeight / 2) + (activeEl.clientHeight / 2);
-      container.scrollTo({
-        top: Math.max(0, targetTop),
-        behavior: 'smooth',
-      });
+      animateScrollTo(targetTop);
     } else if (lyricsData.error || lyricsData.lines.length === 0) {
       // If error or empty, re-fetch without changing song
       loadLyrics(currentTitle, currentArtist, effectiveDur, true);
@@ -463,9 +508,8 @@ export default function LyricsView({
     <div
       ref={lyricsScrollRef}
       className="lyrics-scroll-pane select-text"
-      onScroll={handleUserScroll}
-      onTouchMove={handleUserScroll}
       onWheel={handleUserScroll}
+      onTouchMove={handleUserScroll}
     >
       {lyricsData.loading ? (
         <div className="lyrics-center-message lyrics-center-message--loading select-none" role="status">

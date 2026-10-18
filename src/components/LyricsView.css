@@ -694,8 +694,15 @@
   width: 100%;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: clamp(1.2rem, 3vh, 2.2rem) 0.5rem clamp(3rem, 6vh, 4.5rem);
-  scroll-behavior: auto;
+  -webkit-overflow-scrolling: touch;
+  /* Horizontal padding keeps the scaled active line + glow inside the clip edge.
+     Right side >= 4.5% so the is-active scale(1.045) overshoot is never clipped;
+     percentage resolves against the column width, so it scales on all screens. */
+  padding: clamp(1.2rem, 3vh, 2.2rem) max(1rem, 5%) clamp(3rem, 6vh, 4.5rem) clamp(0.9rem, 2.5vw, 1.75rem);
+  /* Scrolling is animated in JS (see animateScrollTo) — CSS smooth-behavior here
+     would double-ease every scrollTop write and make it feel sluggish */
+  overscroll-behavior: contain;
+  touch-action: pan-y;
   -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 10%, black 82%, transparent 100%);
   mask-image: linear-gradient(to bottom, transparent 0%, black 10%, black 82%, transparent 100%);
   display: flex;
@@ -704,18 +711,12 @@
   font-family: inherit;
 }
 
+.lyrics-scroll-pane {
+  scrollbar-width: none; /* Firefox */
+}
 .lyrics-scroll-pane::-webkit-scrollbar {
-  width: 5px;
-}
-.lyrics-scroll-pane::-webkit-scrollbar-track {
-  background: transparent;
-}
-.lyrics-scroll-pane::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.14);
-  border-radius: 999px;
-}
-.lyrics-scroll-pane::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.28);
+  width: 0;
+  display: none; /* Chrome, Safari, Edge */
 }
 
 .lyric-item {
@@ -732,18 +733,31 @@
   transform: scale(1) translateZ(0);
   transform-origin: left center;
   text-align: left;
-  filter: blur(0.3px);
+  overflow-wrap: break-word;
+  word-break: normal;
   transition:
     color 0.45s cubic-bezier(0.16, 1, 0.3, 1),
     transform 0.45s cubic-bezier(0.16, 1, 0.3, 1),
-    text-shadow 0.45s cubic-bezier(0.16, 1, 0.3, 1),
-    filter 0.38s ease;
-  will-change: transform, color, text-shadow;
+    text-shadow 0.45s cubic-bezier(0.16, 1, 0.3, 1);
 }
+
+/* NOTE: no per-item `filter: blur()` / `will-change` — dozens of GPU-promoted,
+   filtered text layers get repainted during scroll and make it stutter.
+   blur(0.2–0.3px) is visually imperceptible anyway. */
 
 .lyric-item:hover {
   color: rgba(255, 255, 255, 0.85);
-  filter: blur(0px);
+}
+
+/* Default tap/click focus ring stretches across the row and gets clipped by
+   overflow-x: hidden — only show it for keyboard navigation */
+.lyric-item:focus {
+  outline: none;
+}
+
+.lyric-item:focus-visible {
+  outline: 2px solid rgba(0, 242, 254, 0.55);
+  outline-offset: -2px;
 }
 
 .lyric-item.is-active {
@@ -753,7 +767,6 @@
   font-weight: 700 !important;
   line-height: 1.32 !important;
   transform: scale(1.045) translateZ(0) !important;
-  filter: blur(0px) !important;
   text-shadow:
     0 0 16px rgba(0, 242, 254, 0.65),
     0 0 36px rgba(0, 242, 254, 0.35),
@@ -763,7 +776,14 @@
 .lyric-item.is-past {
   font-family: inherit;
   color: rgba(255, 255, 255, 0.32);
-  filter: blur(0.2px);
+}
+
+/* Very narrow screens: shrink the active-line scale so the overshoot stays
+   within the pane padding and never gets clipped mid-word */
+@media (max-width: 420px) {
+  .lyric-item.is-active {
+    transform: scale(1.02) translateZ(0) !important;
+  }
 }
 
 /* 3-dots animated instrumental intro/break */
@@ -899,12 +919,12 @@
   align-items: center;
   gap: 0.5rem;
   padding: 0.45rem 0.6rem;
-  background: rgba(255, 255, 255, 0.08) !important;
+  background: rgba(12, 18, 30, 0.96) !important;
   border-radius: 0.85rem;
-  border: 1px solid rgba(255, 255, 255, 0.22) !important;
+  border: 1px solid rgba(255, 255, 255, 0.24) !important;
   -webkit-backdrop-filter: blur(28px) saturate(180%) !important;
   backdrop-filter: blur(28px) saturate(180%) !important;
-  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.15) !important;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.15) !important;
   box-sizing: border-box;
   width: 100%;
 }
@@ -993,19 +1013,23 @@
   transform: scale(0.94) !important;
 }
 
-/* LRCLIB Results Dropdown with Frosted Blurry Glass Look */
+/* LRCLIB Results Dropdown — near-opaque frosted panel.
+   Full transparency makes lyrics bleed through when backdrop-filter fails
+   (it degrades inside transformed/animated ancestors), so we use a solid
+   base color with only ~3% translucency for depth. */
 .lyrics-search-dropdown {
   position: absolute;
   top: calc(100% + 6px);
   left: 0;
   right: 0;
   max-height: 280px;
-  background: rgba(15, 23, 42, 0.78) !important;
+  background: #0e1626 !important;
+  background: rgba(10, 16, 28, 0.97) !important;
   -webkit-backdrop-filter: blur(28px) saturate(180%) !important;
   backdrop-filter: blur(28px) saturate(180%) !important;
-  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  border: 1px solid rgba(255, 255, 255, 0.22) !important;
   border-radius: 0.85rem !important;
-  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.6) !important;
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(0, 0, 0, 0.35) !important;
   overflow-y: auto;
   overflow-x: hidden;
   z-index: 60;
