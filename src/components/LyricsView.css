@@ -318,7 +318,7 @@
   }
 
   .lyrics-header-title:hover {
-    color: #38bdf8;
+    color: #00f2fe;
   }
 
   .lyrics-header-artist {
@@ -624,8 +624,8 @@
   }
 
   .lyrics-landscape-track-title:hover {
-    color: #38bdf8 !important;
-    text-shadow: 0 0 16px rgba(56, 189, 248, 0.4) !important;
+    color: #00f2fe !important;
+    text-shadow: 0 0 16px rgba(0, 242, 254, 0.4) !important;
   }
 
   .lyrics-landscape-track-artist {

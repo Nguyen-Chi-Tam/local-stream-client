@@ -603,7 +603,7 @@ export default function LyricsView({
         <span ref={timeTextRef} className="player-time select-none">
           {formatTime ? formatTime(effectiveTime) : '0:00'}
         </span>
-        <div className="player-seekbar-wrap select-none is-playing">
+        <div className={`player-seekbar-wrap select-none${isPlaying ? ' is-playing' : ''}`}>
           <div className="seekbar-custom-track select-none" />
           <div
             className="seekbar-custom-buffered select-none"
