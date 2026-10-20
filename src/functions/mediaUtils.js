@@ -271,6 +271,30 @@ export function cleanYouTubeTitle(title) {
   return clean.replace(/[\s|/\\•–—~:]+$/, '').replace(/\s+/g, ' ').trim();
 }
 
+/**
+ * Returns the cleaned filename label (no extension/video tags), independent of
+ * ID3 metadata. Untagged or badly tagged files often still carry the original
+ * "Artist - Title" name, which is a valuable extra lookup signal.
+ */
+export function pickPathTitle(item) {
+  if (!item) return '';
+
+  const pathObj =
+    item.path ||
+    item.filePath ||
+    item.filepath ||
+    item.fullPath ||
+    item.location ||
+    item.url ||
+    item.streamUrl ||
+    '';
+  const fromPath = extractTitleFromPath(pathObj);
+  if (!fromPath) return '';
+
+  const cleanFromPath = fromPath.replace(/\s*\([^)]*_(?:\d+K|\d+KB|\d+MB)\)\s*$/i, '').trim();
+  return cleanYouTubeTitle(cleanFromPath);
+}
+
 export function pickTitle(item) {
   if (!item) return 'Untitled';
 

@@ -8,7 +8,8 @@ import {
   FastForward,
   MicOff,
   Search,
-  RefreshCw,
+  AudioLines,
+  Unlink,
   X,
   Disc,
   ZoomIn,
@@ -23,13 +24,35 @@ import {
   cleanTrackTitle,
   parseTrackAndArtist,
   searchLyrics,
+  getSearchSuggestions,
+  limitSearchQueryInput,
+  normalizeText,
   formatCandidateResult,
   saveSessionLyrics,
   getSessionLyrics,
   saveSelectedLyrics,
   getSelectedLyrics,
+  unlinkLyricsForTrack,
 } from '../functions/lyricsService.js';
+import { pickPathTitle } from '../functions/mediaUtils.js';
 import './LyricsView.css';
+
+const REALTIME_SYNC_KEY = 'localstream_lyrics_realtime_sync';
+const SEARCH_DEBOUNCE_MS = 350;
+const LYRICS_SEARCH_TIMEOUT_MS = 30000;
+const LYRICS_TIMEOUT_MESSAGE = 'Lyrics not found. The search timed out after 30 seconds.';
+const LYRICS_SEARCH_FAILED_MESSAGE = 'Lyrics not found. Check your connection and try again.';
+const MANUAL_SEARCH_TIMEOUT_MESSAGE = 'No lyrics found. The search timed out after 30 seconds.';
+const MANUAL_SEARCH_FAILED_MESSAGE = 'Search failed. Check your connection and try again.';
+
+function loadRealtimeSyncEnabled() {
+  try {
+    const stored = window.localStorage.getItem(REALTIME_SYNC_KEY);
+    return stored == null ? true : stored === 'true';
+  } catch {
+    return true;
+  }
+}
 
 export default function LyricsView({
   currentlyPlaying,
@@ -75,13 +98,23 @@ export default function LyricsView({
   });
 
   const [currentActiveLyricIndex, setCurrentActiveLyricIndex] = useState(-1);
+  const [isRealtimeSync, setIsRealtimeSync] = useState(loadRealtimeSyncEnabled);
+  const [isUnlinkingLyrics, setIsUnlinkingLyrics] = useState(false);
   const [isManualSearchOpen, setIsManualSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState(null);
+  const [searchSuggestions, setSearchSuggestions] = useState([]);
+  const [searchError, setSearchError] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const searchDebounceRef = useRef(null);
   const searchContainerRef = useRef(null);
+  const searchRequestRef = useRef(0);
+  const searchQueryDirtyRef = useRef(false);
+  const searchAbortRef = useRef(null);
   const lyricsRequestRef = useRef(0);
+  const lyricsAbortRef = useRef(null);
+  const manualSelectionRef = useRef(null);
+  const semanticWarmupStartedRef = useRef(false);
 
   const lyricsScrollRef = useRef(null);
   const lineRefs = useRef([]);
@@ -101,19 +134,65 @@ export default function LyricsView({
   const currentTitle = currentlyPlaying ? (pickTitle ? pickTitle(currentlyPlaying) : currentlyPlaying.title || '') : '';
   const currentArtist = currentlyPlaying ? (pickArtist ? pickArtist(currentlyPlaying) : currentlyPlaying.artist || '') : '';
   const parsedCurrent = parseTrackAndArtist(currentTitle, currentArtist);
+  // Files with broken ID3 tags often still have the original "Artist - Title"
+  // filename. Use that label as the preferred search query when it looks like
+  // a real track, so automatic lookup and the manual search box agree.
+  const pathTitle = currentlyPlaying ? pickPathTitle(currentlyPlaying) : '';
+  const parsedPath = pathTitle ? parseTrackAndArtist(pathTitle, '') : null;
+  const pathLabelUsable = Boolean(
+    pathTitle
+    && parsedPath?.title
+    && parsedPath?.artist
+    && /[\p{L}]/u.test(parsedPath.title)
+    && /[\p{L}]/u.test(parsedPath.artist)
+    && !/^(?:audio|song|track|video)\s*\d*$/i.test(parsedPath.title)
+    && !/^(?:audio|song|track|video)\s*\d*$/i.test(parsedPath.artist),
+  );
+  const pathLookupLabel = pathLabelUsable ? pathTitle : '';
   const displayTitle = cleanTrackTitle(lyricsData.trackName) || parsedCurrent.title || cleanTrackTitle(currentTitle);
   const displayArtist = lyricsData.artistName || parsedCurrent.artist || currentArtist;
+  // Build from parsed metadata rather than raw title + artist so a filename
+  // like "Rick Astley - Never Gonna Give You Up (Video)" does not become
+  // "Rick Astley - Never Gonna Give You Up Rick Astley" or carry a stale
+  // search from the previously played track.
+  const metadataSearchQuery = parsedCurrent.artist && parsedCurrent.title
+    ? `${parsedCurrent.artist} - ${parsedCurrent.title}`
+    : [currentTitle, currentArtist].filter(Boolean).join(' ')
+      || parsedCurrent.title
+      || cleanTrackTitle(currentTitle);
+  const trackSearchQuery = pathLookupLabel || metadataSearchQuery;
   const artSrc = displayArtUrl || currentArtUrl || defaultArt;
 
   // ── 1. Fetch Lyrics on track change ──────────────────────────────────────────────
-  const loadLyrics = useCallback(async (title, artist, duration, forceRefresh = false) => {
+  const loadLyrics = useCallback(async (title, artist, duration, forceRefresh = false, lookupHint = '') => {
     if (!title) return;
+
+    // Any new lookup supersedes the previous one, including its network calls.
+    if (lyricsAbortRef.current) {
+      lyricsAbortRef.current.abort();
+      lyricsAbortRef.current = null;
+    }
+
     const requestId = lyricsRequestRef.current + 1;
     lyricsRequestRef.current = requestId;
     const isCurrentRequest = () => lyricsRequestRef.current === requestId;
 
+    // A manual choice is authoritative for the current track. This also stops
+    // automatic lookup from restarting when the duration arrives a moment later.
+    const manualSelection = manualSelectionRef.current;
+    if (
+      !forceRefresh
+      && manualSelection
+      && manualSelection.title === title
+      && (manualSelection.artist || '') === (artist || '')
+    ) {
+      if (!isCurrentRequest()) return;
+      setLyricsData({ ...manualSelection.data, loading: false });
+      return;
+    }
+
     if (!forceRefresh) {
-      const selectedLyrics = getSelectedLyrics(title, artist);
+      const selectedLyrics = getSelectedLyrics(title, artist, lookupHint);
       if (selectedLyrics && (selectedLyrics.lines?.length > 0 || selectedLyrics.instrumental)) {
         if (!isCurrentRequest()) return;
         setLyricsData({
@@ -128,7 +207,7 @@ export default function LyricsView({
         return;
       }
 
-      const sessionCached = getSessionLyrics(title, artist);
+      const sessionCached = getSessionLyrics(title, artist, lookupHint);
       if (sessionCached && (sessionCached.lines?.length > 0 || sessionCached.instrumental)) {
         if (!isCurrentRequest()) return;
         setLyricsData({
@@ -144,9 +223,33 @@ export default function LyricsView({
       }
     }
 
+    const controller = new AbortController();
+    lyricsAbortRef.current = controller;
+    let timedOut = false;
+    let timeoutId;
+    const timeoutPromise = new Promise((_, reject) => {
+      timeoutId = window.setTimeout(() => {
+        timedOut = true;
+        controller.abort();
+        const timeoutError = new Error('Lyrics search timed out');
+        timeoutError.name = 'AbortError';
+        reject(timeoutError);
+      }, LYRICS_SEARCH_TIMEOUT_MS);
+    });
+
     setLyricsData((prev) => ({ ...prev, loading: true, error: null }));
     try {
-      const res = await fetchLyrics(title, artist, duration, forceRefresh);
+      const res = await Promise.race([
+        fetchLyrics(
+          title,
+          artist,
+          duration,
+          forceRefresh,
+          lookupHint,
+          controller.signal,
+        ),
+        timeoutPromise,
+      ]);
       if (!isCurrentRequest()) return;
       if (res) {
         const cleanName = cleanTrackTitle(res.trackName) || res.trackName || title;
@@ -179,18 +282,37 @@ export default function LyricsView({
         synced: false,
         lines: [],
         instrumental: false,
-        error: 'Failed to fetch lyrics. Check network connection.',
+        error: timedOut ? LYRICS_TIMEOUT_MESSAGE : LYRICS_SEARCH_FAILED_MESSAGE,
         trackName: title,
         artistName: artist,
       });
+    } finally {
+      window.clearTimeout(timeoutId);
+      if (lyricsAbortRef.current === controller) {
+        lyricsAbortRef.current = null;
+      }
     }
   }, []);
 
   useEffect(() => {
-    if (!currentlyPlaying) return;
+    if (!currentlyPlaying) {
+      if (lyricsAbortRef.current) {
+        lyricsAbortRef.current.abort();
+        lyricsAbortRef.current = null;
+      }
+      if (searchAbortRef.current) {
+        searchAbortRef.current.abort();
+        searchAbortRef.current = null;
+      }
+      return;
+    }
     const parsed = parseTrackAndArtist(currentTitle, currentArtist);
     const mediaTitle = cleanTrackTitle(currentTitle) || parsed.title;
     const mediaArtist = currentArtist || parsed.artist;
+    if (searchAbortRef.current) {
+      searchAbortRef.current.abort();
+      searchAbortRef.current = null;
+    }
     lyricsRequestRef.current += 1;
     setLyricsData({
       loading: true,
@@ -201,17 +323,26 @@ export default function LyricsView({
       trackName: mediaTitle,
       artistName: mediaArtist,
     });
-    setSearchQuery([currentTitle, currentArtist].filter(Boolean).join(' ') || parsed.title || cleanTrackTitle(currentTitle));
+    setSearchQuery(trackSearchQuery);
+    searchQueryDirtyRef.current = false;
+    if (searchDebounceRef.current) {
+      clearTimeout(searchDebounceRef.current);
+      searchDebounceRef.current = null;
+    }
+    searchRequestRef.current += 1;
+    setIsSearching(false);
     setIsManualSearchOpen(false);
     setSearchResults(null);
+    setSearchSuggestions([]);
+    setSearchError('');
     lineRefs.current = [];
     setCurrentActiveLyricIndex(-1);
-    loadLyrics(currentTitle, currentArtist, effectiveDur);
-  }, [currentlyPlaying, currentTitle, currentArtist, effectiveDur, loadLyrics]);
+    loadLyrics(currentTitle, currentArtist, effectiveDur, false, pathLookupLabel);
+  }, [currentlyPlaying, currentTitle, currentArtist, effectiveDur, loadLyrics, trackSearchQuery, pathLookupLabel]);
 
   // ── 2. Time-Sync Detection Loop ──────────────────────────────────────────────────
   useEffect(() => {
-    if (!lyricsData.lines || lyricsData.lines.length === 0) return;
+    if (!isRealtimeSync || !lyricsData.lines || lyricsData.lines.length === 0) return;
 
     let animId;
     const updateSync = () => {
@@ -236,7 +367,7 @@ export default function LyricsView({
 
     animId = requestAnimationFrame(updateSync);
     return () => cancelAnimationFrame(animId);
-  }, [lyricsData.lines, currentActiveLyricIndex, audioRef, currentTime]);
+  }, [isRealtimeSync, lyricsData.lines, currentActiveLyricIndex, audioRef, currentTime]);
 
   // ── 3. Smooth Auto-Scroll with User Interaction Detection ───────────────────────
   const stopScrollAnimation = useCallback(() => {
@@ -297,7 +428,14 @@ export default function LyricsView({
 
   useEffect(() => () => stopScrollAnimation(), [stopScrollAnimation]);
 
+  useEffect(() => () => {
+    if (lyricsAbortRef.current) lyricsAbortRef.current.abort();
+    if (searchAbortRef.current) searchAbortRef.current.abort();
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+  }, []);
+
   useEffect(() => {
+    if (!isRealtimeSync) return;
     if (userScrollingRef.current) return;
     if (currentActiveLyricIndex >= 0 && lineRefs.current[currentActiveLyricIndex] && lyricsScrollRef.current) {
       const container = lyricsScrollRef.current;
@@ -305,9 +443,26 @@ export default function LyricsView({
       const targetTop = activeEl.offsetTop - (container.clientHeight / 2) + (activeEl.clientHeight / 2);
       animateScrollTo(targetTop);
     }
-  }, [currentActiveLyricIndex, animateScrollTo]);
+  }, [isRealtimeSync, currentActiveLyricIndex, animateScrollTo]);
 
   // ── Keyboard shortcut: Escape exits search or lyrics ────────────────────────────
+  const closeManualSearch = useCallback(() => {
+    if (searchDebounceRef.current) {
+      clearTimeout(searchDebounceRef.current);
+      searchDebounceRef.current = null;
+    }
+    if (searchAbortRef.current) {
+      searchAbortRef.current.abort();
+      searchAbortRef.current = null;
+    }
+    searchRequestRef.current += 1;
+    setIsManualSearchOpen(false);
+    setSearchResults(null);
+    setSearchSuggestions([]);
+    setSearchError('');
+    setIsSearching(false);
+  }, []);
+
   useEffect(() => {
     function handleKeyDown(e) {
       if (e.key !== 'Escape') return;
@@ -319,15 +474,14 @@ export default function LyricsView({
       }
 
       if (isManualSearchOpen) {
-        setIsManualSearchOpen(false);
-        setSearchResults(null);
+        closeManualSearch();
       } else if (onCloseLyrics) {
         onCloseLyrics();
       }
     }
     window.addEventListener('keydown', handleKeyDown, true);
     return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [isManualSearchOpen, onCloseLyrics]);
+  }, [isManualSearchOpen, onCloseLyrics, closeManualSearch]);
 
   // Click outside search container to close
   useEffect(() => {
@@ -335,8 +489,7 @@ export default function LyricsView({
     function handleClickOutside(e) {
       if (searchContainerRef.current && !searchContainerRef.current.contains(e.target)) {
         if (!e.target.closest('.lyrics-icon-btn')) {
-          setIsManualSearchOpen(false);
-          setSearchResults(null);
+          closeManualSearch();
         }
       }
     }
@@ -346,7 +499,7 @@ export default function LyricsView({
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('touchstart', handleClickOutside);
     };
-  }, [isManualSearchOpen]);
+  }, [isManualSearchOpen, closeManualSearch]);
 
   // ── 4. Seek to Lyric Line on Click ──────────────────────────────────────────────
   const handleLyricLineClick = (time) => {
@@ -360,48 +513,141 @@ export default function LyricsView({
   };
 
   // ── 5. Manual Search Handlers ───────────────────────────────────────────────────
+  // Suggestions are local, so this can run on every keystroke: history and
+  // cached result titles plus the track currently playing. No request is sent
+  // until the debounce expires.
+  const buildSearchSuggestions = useCallback((value) => {
+    const suggestions = getSearchSuggestions(value);
+    const normalized = normalizeText(limitSearchQueryInput(value));
+    if (normalized.length < 2) return suggestions;
+
+    // Prefer the filename-derived label over raw metadata: the whole point of
+    // this flow is that ID3 values can name the wrong uploader/cover artist.
+    const seeds = [trackSearchQuery, displayTitle].filter(Boolean);
+    for (const seed of seeds) {
+      const key = normalizeText(seed);
+      if (!key || key === normalized || !key.includes(normalized)) continue;
+      if (suggestions.some((item) => normalizeText(item.value) === key)) continue;
+      suggestions.unshift({
+        value: seed,
+        label: displayTitle || seed,
+        detail: 'Current track',
+      });
+    }
+    return suggestions.slice(0, 6);
+  }, [trackSearchQuery, displayTitle]);
+
   const performSearch = useCallback(async (query) => {
+    if (searchAbortRef.current) {
+      searchAbortRef.current.abort();
+      searchAbortRef.current = null;
+    }
     if (!query || !query.trim()) {
+      searchRequestRef.current += 1;
       setSearchResults(null);
+      setSearchError('');
       setIsSearching(false);
       return;
     }
+    const requestId = searchRequestRef.current + 1;
+    searchRequestRef.current = requestId;
+    const controller = new AbortController();
+    searchAbortRef.current = controller;
+    let timedOut = false;
+    let timeoutId;
+    const timeoutPromise = new Promise((_, reject) => {
+      timeoutId = window.setTimeout(() => {
+        timedOut = true;
+        controller.abort();
+        const timeoutError = new Error('Lyrics search timed out');
+        timeoutError.name = 'AbortError';
+        reject(timeoutError);
+      }, LYRICS_SEARCH_TIMEOUT_MS);
+    });
+
     setIsSearching(true);
+    setSearchSuggestions([]);
+    setSearchError('');
     try {
-      const results = await searchLyrics(query.trim(), effectiveDur);
+      const results = await Promise.race([
+        searchLyrics(query.trim(), effectiveDur, {
+          signal: controller.signal,
+        }),
+        timeoutPromise,
+      ]);
+      if (searchRequestRef.current !== requestId) return;
       setSearchResults(results);
     } catch (err) {
+      if (searchRequestRef.current !== requestId) return;
       console.error('Manual search error:', err);
       setSearchResults([]);
+      setSearchError(timedOut ? MANUAL_SEARCH_TIMEOUT_MESSAGE : MANUAL_SEARCH_FAILED_MESSAGE);
     } finally {
-      setIsSearching(false);
+      window.clearTimeout(timeoutId);
+      if (searchAbortRef.current === controller) {
+        searchAbortRef.current = null;
+      }
+      if (searchRequestRef.current === requestId) {
+        setIsSearching(false);
+      }
     }
   }, [effectiveDur]);
 
   const handleSearchInputChange = (val) => {
-    setSearchQuery(val);
+    const next = limitSearchQueryInput(val);
+    if (next === searchQuery) return;
+    searchQueryDirtyRef.current = true;
+    setSearchQuery(next);
+    setSearchResults(null);
+    setSearchError('');
+    setSearchSuggestions(buildSearchSuggestions(next));
+    setIsSearching(false);
+    // Typing invalidates the previous query immediately, so its late response
+    // cannot replace the suggestions for the new text.
+    if (searchAbortRef.current) {
+      searchAbortRef.current.abort();
+      searchAbortRef.current = null;
+    }
+    searchRequestRef.current += 1;
     if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
-    if (!val.trim()) {
-      setSearchResults(null);
+    if (!next.trim()) {
       setIsSearching(false);
+      setSearchSuggestions([]);
       return;
     }
     searchDebounceRef.current = setTimeout(() => {
-      performSearch(val);
-    }, 400);
+      performSearch(next);
+    }, SEARCH_DEBOUNCE_MS);
   };
 
   const handleManualSearchSubmit = (e) => {
     e.preventDefault();
     if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
-    performSearch(searchQuery);
+    const query = limitSearchQueryInput(searchQuery);
+    setSearchQuery(query);
+    setSearchSuggestions([]);
+    performSearch(query);
   };
 
-  const [isRefreshingAnim, setIsRefreshingAnim] = useState(false);
+  const handleSuggestionSelect = (suggestion) => {
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    searchQueryDirtyRef.current = true;
+    setSearchQuery(suggestion.value);
+    setSearchSuggestions([]);
+    setSearchResults(null);
+    performSearch(suggestion.value);
+  };
 
   const handleSelectCandidate = (candidate) => {
     const formatted = formatCandidateResult(candidate);
     if (formatted) {
+      // The user found the lyrics themselves. Invalidate and abort any automatic
+      // lookup still in flight so it cannot overwrite this choice.
+      lyricsRequestRef.current += 1;
+      if (lyricsAbortRef.current) {
+        lyricsAbortRef.current.abort();
+        lyricsAbortRef.current = null;
+      }
       const resultData = {
         loading: false,
         synced: Boolean(formatted.synced),
@@ -411,49 +657,85 @@ export default function LyricsView({
         trackName: formatted.trackName,
         artistName: formatted.artistName,
       };
+      manualSelectionRef.current = {
+        title: currentTitle,
+        artist: currentArtist,
+        data: resultData,
+      };
       setLyricsData(resultData);
       // Explicit user selections persist until the server is disconnected.
       saveSelectedLyrics(currentTitle, currentArtist, resultData);
     }
-    setIsManualSearchOpen(false);
-    setSearchResults(null);
+    closeManualSearch();
     lineRefs.current = [];
     setCurrentActiveLyricIndex(-1);
   };
 
   const toggleManualSearch = () => {
-    setIsManualSearchOpen((prev) => {
-      const next = !prev;
-      if (next) {
-        const initial = searchQuery || [currentTitle, currentArtist].filter(Boolean).join(' ') || displayTitle || cleanTrackTitle(currentTitle);
-        setSearchQuery(initial);
-        if (initial) {
-          performSearch(initial);
-        }
-      } else {
-        setSearchResults(null);
-      }
-      return next;
-    });
+    if (isManualSearchOpen) {
+      closeManualSearch();
+      return;
+    }
+
+    if (!semanticWarmupStartedRef.current) {
+      semanticWarmupStartedRef.current = true;
+      import('../functions/semanticSearch.js')
+        .then(({ warmUpSemanticSearch }) => warmUpSemanticSearch())
+        .catch(() => {});
+    }
+    const initial = searchQueryDirtyRef.current && searchQuery
+      ? searchQuery
+      : trackSearchQuery || searchQuery || displayTitle || cleanTrackTitle(currentTitle);
+    setSearchQuery(initial);
+    setSearchSuggestions(buildSearchSuggestions(initial));
+    setIsManualSearchOpen(true);
+    if (initial) {
+      performSearch(initial);
+    }
   };
 
-  const handleRefreshLyrics = () => {
-    setIsRefreshingAnim(true);
-    setTimeout(() => setIsRefreshingAnim(false), 650);
-
-    // Center ongoing lyrics without changing the song
-    userScrollingRef.current = false;
-    if (userScrollTimeoutRef.current) clearTimeout(userScrollTimeoutRef.current);
-
-    if (currentActiveLyricIndex >= 0 && lineRefs.current[currentActiveLyricIndex] && lyricsScrollRef.current) {
-      const container = lyricsScrollRef.current;
-      const activeEl = lineRefs.current[currentActiveLyricIndex];
-      const targetTop = activeEl.offsetTop - (container.clientHeight / 2) + (activeEl.clientHeight / 2);
-      animateScrollTo(targetTop);
-    } else if (lyricsData.error || lyricsData.lines.length === 0) {
-      // If error or empty, re-fetch without changing song
-      loadLyrics(currentTitle, currentArtist, effectiveDur, true);
+  const toggleRealtimeSync = useCallback(() => {
+    const next = !isRealtimeSync;
+    setIsRealtimeSync(next);
+    try {
+      window.localStorage.setItem(REALTIME_SYNC_KEY, String(next));
+    } catch {
+      // Storage unavailable
     }
+
+    if (next) {
+      // Re-enabling immediately recenters on the line that is playing now.
+      userScrollingRef.current = false;
+      if (userScrollTimeoutRef.current) {
+        clearTimeout(userScrollTimeoutRef.current);
+        userScrollTimeoutRef.current = null;
+      }
+    } else {
+      stopScrollAnimation();
+      setCurrentActiveLyricIndex(-1);
+    }
+  }, [isRealtimeSync, stopScrollAnimation]);
+
+  const handleUnlinkLyrics = () => {
+    if (isUnlinkingLyrics || !currentTitle) return;
+    setIsUnlinkingLyrics(true);
+    manualSelectionRef.current = null;
+    unlinkLyricsForTrack(currentTitle, currentArtist);
+    closeManualSearch();
+    lineRefs.current = [];
+    setCurrentActiveLyricIndex(-1);
+    // Drop the wrong association and run a fresh automatic match.
+    setLyricsData((prev) => ({
+      ...prev,
+      loading: true,
+      synced: false,
+      lines: [],
+      instrumental: false,
+      error: null,
+    }));
+    loadLyrics(currentTitle, currentArtist, effectiveDur, true, pathLookupLabel).finally(() => {
+      setIsUnlinkingLyrics(false);
+    });
   };
 
   // ── 6. Timeline Scrubbing Handlers ──────────────────────────────────────────────
@@ -533,7 +815,7 @@ export default function LyricsView({
           <p style={{ fontSize: '0.88rem', color: 'rgba(255, 255, 255, 0.6)', margin: '0 0 1.25rem', lineHeight: 1.45 }}>
             {lyricsData.instrumental
               ? 'This track does not have vocal lyrics.'
-              : `We couldn't find time-synced lyrics for "${displayTitle}".`}
+              : lyricsData.error || `We couldn't find time-synced lyrics for "${displayTitle}".`}
           </p>
           {!lyricsData.instrumental && (
             <button
@@ -795,10 +1077,22 @@ export default function LyricsView({
             <button
               type="button"
               className="lyrics-icon-btn"
-              title="Center ongoing lyrics / Refresh"
-              onClick={handleRefreshLyrics}
+              title="Unlink wrong lyrics and match again"
+              aria-label="Unlink wrong lyrics and match again"
+              onClick={handleUnlinkLyrics}
+              disabled={isUnlinkingLyrics || !currentTitle}
             >
-              <RefreshCw size={13} className={isRefreshingAnim || lyricsData.loading ? 'animate-spin' : ''} />
+              <Unlink size={14} />
+            </button>
+            <button
+              type="button"
+              className={`lyrics-icon-btn lyrics-sync-btn${isRealtimeSync ? ' is-active' : ' is-inactive'}`}
+              title={`Real-time lyrics sync ${isRealtimeSync ? 'on' : 'off'} — click to turn ${isRealtimeSync ? 'off' : 'on'}`}
+              aria-label={`Real-time lyrics sync ${isRealtimeSync ? 'on' : 'off'}`}
+              aria-pressed={isRealtimeSync}
+              onClick={toggleRealtimeSync}
+            >
+              <AudioLines size={15} />
             </button>
           </div>
         </div>
@@ -898,7 +1192,7 @@ export default function LyricsView({
               <button
                 type="button"
                 className="lyrics-icon-btn"
-              title="Search lyrics"
+                title="Search lyrics"
                 onClick={toggleManualSearch}
               >
                 <Search size={15} />
@@ -906,10 +1200,22 @@ export default function LyricsView({
               <button
                 type="button"
                 className="lyrics-icon-btn"
-                title="Center ongoing lyrics / Refresh"
-                onClick={handleRefreshLyrics}
+                title="Unlink wrong lyrics and match again"
+                aria-label="Unlink wrong lyrics and match again"
+                onClick={handleUnlinkLyrics}
+                disabled={isUnlinkingLyrics || !currentTitle}
               >
-                <RefreshCw size={13} className={isRefreshingAnim || lyricsData.loading ? 'animate-spin' : ''} />
+                <Unlink size={14} />
+              </button>
+              <button
+                type="button"
+                className={`lyrics-icon-btn lyrics-sync-btn${isRealtimeSync ? ' is-active' : ' is-inactive'}`}
+                title={`Real-time lyrics sync ${isRealtimeSync ? 'on' : 'off'} — click to turn ${isRealtimeSync ? 'off' : 'on'}`}
+                aria-label={`Real-time lyrics sync ${isRealtimeSync ? 'on' : 'off'}`}
+                aria-pressed={isRealtimeSync}
+                onClick={toggleRealtimeSync}
+              >
+                <AudioLines size={15} />
               </button>
             </div>
 
@@ -923,6 +1229,11 @@ export default function LyricsView({
                     placeholder="Search song title or artist..."
                     value={searchQuery}
                     onChange={(e) => handleSearchInputChange(e.target.value)}
+                    onFocus={() => {
+                      if (!searchResults || searchResults.length === 0) {
+                        setSearchSuggestions(buildSearchSuggestions(searchQuery));
+                      }
+                    }}
                     autoFocus
                   />
                   <button
@@ -943,75 +1254,112 @@ export default function LyricsView({
                     className="lyrics-search-close-btn"
                     title="Close search"
                     aria-label="Close search"
-                    onClick={() => {
-                      setIsManualSearchOpen(false);
-                      setSearchResults(null);
-                    }}
+                    onClick={closeManualSearch}
                   >
                     <X size={16} />
                   </button>
                 </form>
 
                 {/* Lyrics search results */}
-                {(isSearching || searchResults !== null) && (
+                {(isSearching || searchResults !== null || searchSuggestions.length > 0) && (
                   <div className="lyrics-search-dropdown select-none">
                     {isSearching ? (
                       <div className="lyrics-dropdown-status select-none">
                         <ClipLoader className="lyrics-search-spinner" color="#36d7b7" size={15} />
                         <span>Searching lyrics…</span>
                       </div>
-                    ) : searchResults && searchResults.length === 0 ? (
-                      <div className="lyrics-dropdown-status select-none">
-                        <span>No matching lyrics found. Try the song title or another spelling.</span>
-                      </div>
-                    ) : searchResults && (
-                      <div className="lyrics-dropdown-results select-none">
-                        {searchResults.map((item) => (
-                          <button
-                            key={item.id}
-                            type="button"
-                            className="lyrics-dropdown-item select-none"
-                            onClick={() => handleSelectCandidate(item)}
-                          >
-                            <div className="lyrics-dropdown-item-main">
-                              <span
-                                className="lyrics-dropdown-item-title"
-                                title={item.name || item.trackName}
+                    ) : (
+                      <>
+                        {searchSuggestions.length > 0 && (!searchResults || searchResults.length === 0) && (
+                          <div className="lyrics-dropdown-suggestions select-none">
+                            <div className="lyrics-dropdown-section-label">Suggestions</div>
+                            {searchSuggestions.map((suggestion) => (
+                              <button
+                                key={suggestion.value}
+                                type="button"
+                                className="lyrics-suggestion-item select-none"
+                                onClick={() => handleSuggestionSelect(suggestion)}
                               >
-                                {item.name || item.trackName}
-                              </span>
-                              <span
-                                className="lyrics-dropdown-item-sub"
-                                title={item.artistName}
+                                <span className="lyrics-suggestion-icon">
+                                  <Search size={12} />
+                                </span>
+                                <span className="lyrics-suggestion-text">
+                                  <span className="lyrics-suggestion-label">{suggestion.label}</span>
+                                  {suggestion.detail && (
+                                    <span className="lyrics-suggestion-detail">{suggestion.detail}</span>
+                                  )}
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+
+                        {searchResults && searchResults.length === 0 && (
+                          <div className="lyrics-dropdown-status select-none">
+                            <span>
+                              {searchError
+                                || (searchSuggestions.length > 0
+                                  ? 'No exact match. Try a suggestion:'
+                                  : 'No matching lyrics found. Try the song title or another spelling.')}
+                            </span>
+                          </div>
+                        )}
+
+                        {searchResults && searchResults.length > 0 && (
+                          <div className="lyrics-dropdown-results select-none">
+                            {searchResults.map((item) => (
+                              <button
+                                key={item.id || `${item.name || item.trackName}_${item.artistName || ''}`}
+                                type="button"
+                                className="lyrics-dropdown-item select-none"
+                                onClick={() => handleSelectCandidate(item)}
                               >
-                                {item.artistName || 'Unknown Artist'}
-                                {item.albumName ? ` • ${item.albumName}` : ''}
-                              </span>
-                            </div>
-                            <div className="lyrics-dropdown-item-meta">
-                              {item.duration > 0 && (
-                                <span className="lyrics-dropdown-dur">
-                                  {Math.floor(item.duration / 60)}:
-                                  {String(Math.round(item.duration % 60)).padStart(2, '0')}
-                                </span>
-                              )}
-                              {item.syncedLyrics ? (
-                                <span className="lyrics-dropdown-badge lyrics-badge-synced">
-                                  Synced
-                                </span>
-                              ) : item.instrumental ? (
-                                <span className="lyrics-dropdown-badge lyrics-badge-inst">
-                                  Instrumental
-                                </span>
-                              ) : item.plainLyrics ? (
-                                <span className="lyrics-dropdown-badge lyrics-badge-plain">
-                                  Plain
-                                </span>
-                              ) : null}
-                            </div>
-                          </button>
-                        ))}
-                      </div>
+                                <div className="lyrics-dropdown-item-main">
+                                  <span
+                                    className="lyrics-dropdown-item-title"
+                                    title={item.name || item.trackName}
+                                  >
+                                    {item.name || item.trackName}
+                                  </span>
+                                  <span
+                                    className="lyrics-dropdown-item-sub"
+                                    title={item.artistName}
+                                  >
+                                    {item.artistName || 'Unknown Artist'}
+                                    {item.albumName ? ` • ${item.albumName}` : ''}
+                                  </span>
+                                  {item.snippet && (
+                                    <span className="lyrics-dropdown-item-snippet">
+                                      {item.snippet}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="lyrics-dropdown-item-meta">
+                                  {item.duration > 0 && (
+                                    <span className="lyrics-dropdown-dur">
+                                      {Math.floor(item.duration / 60)}:
+                                      {String(Math.round(item.duration % 60)).padStart(2, '0')}
+                                    </span>
+                                  )}
+                                  {item.syncedLyrics ? (
+                                    <span className="lyrics-dropdown-badge lyrics-badge-synced">
+                                      Synced
+                                    </span>
+                                  ) : item.instrumental ? (
+                                    <span className="lyrics-dropdown-badge lyrics-badge-inst">
+                                      Instrumental
+                                    </span>
+                                  ) : item.plainLyrics ? (
+                                    <span className="lyrics-dropdown-badge lyrics-badge-plain">
+                                      Plain
+                                    </span>
+                                  ) : null}
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                 )}
