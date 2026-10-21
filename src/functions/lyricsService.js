@@ -6,6 +6,22 @@ const lyricsCache = new Map();
 // LRU cache for manual-search shortlists. Kept per app session so repeated
 // queries and backspacing do not hit LRCLIB again.
 const searchResultCache = new Map();
+
+// Short clips, intros, and stingers rarely have lyrics worth matching. Below
+// this duration automatic lookup is skipped entirely so a 30-second file does
+// not get linked to an unrelated full-length song.
+export const MIN_LYRICS_TRACK_DURATION_SECONDS = 90;
+export const LYRICS_TOO_SHORT_MESSAGE =
+  'Lyrics are not searched automatically for tracks under 1 minute 30 seconds.';
+
+/**
+ * True when the track is known to be shorter than the automatic-lyrics minimum.
+ * An unknown duration (0) stays eligible because there is nothing to compare.
+ */
+export function isLyricsTrackTooShort(duration) {
+  const seconds = Number(duration);
+  return Number.isFinite(seconds) && seconds > 0 && seconds < MIN_LYRICS_TRACK_DURATION_SECONDS;
+}
 // Tracks the user explicitly unlinked. Automatic lookup must return "not
 // found" for these until the user manually links lyrics again.
 const unlinkedLyricsCache = new Set();
@@ -394,6 +410,247 @@ function getCandidateTitle(candidate) {
     if (title) return title;
   }
   return name;
+}
+
+/**
+ * Normalized title-match strength in the 0..1 range. Exact titles score 1,
+ * prefix/substring matches score 0.85/0.75, and typo-tolerant word coverage
+ * contributes the remainder. A score above 0 is a title match; the value then
+ * breaks ties between equally matched artists and synced/plain results.
+ */
+function calculateTitleScore(candidateTitle, targetTitle) {
+  const normTarget = normalizeText(targetTitle);
+  const normCandidate = normalizeText(candidateTitle);
+  if (!normTarget || !normCandidate) return 0;
+  if (normTarget === normCandidate) return 1;
+
+  const targetClean = normalizeText(stripExtraTitleDetails(targetTitle));
+  const candidateClean = normalizeText(stripExtraTitleDetails(candidateTitle));
+  if (targetClean && candidateClean && targetClean === candidateClean) return 1;
+
+  if (normCandidate.startsWith(normTarget) || normTarget.startsWith(normCandidate) ||
+      (targetClean && candidateClean &&
+        (candidateClean.startsWith(targetClean) || targetClean.startsWith(candidateClean)))) {
+    return 0.85;
+  }
+  if (normCandidate.includes(normTarget) || normTarget.includes(normCandidate) ||
+      (targetClean && candidateClean &&
+        (candidateClean.includes(targetClean) || targetClean.includes(candidateClean)))) {
+    return 0.75;
+  }
+
+  const targetTokens = tokenizeNormalized(targetClean || normTarget);
+  const candidateTokens = tokenizeNormalized(candidateClean || normCandidate);
+  const ratio = Math.max(
+    weightedTokenCoverage(targetTokens, candidateTokens),
+    stringSimilarity(targetClean || normTarget, candidateClean || normCandidate),
+  );
+  return ratio >= 0.5 ? 0.6 * ratio : 0;
+}
+
+/**
+ * True when the candidate title matches the target after word splitting.
+ * Substring and typo-tolerant token coverage are both accepted because the
+ * candidate may use a different parenthetical or spelling.
+ */
+function titlesMatch(candidateTitle, targetTitle) {
+  return calculateTitleScore(candidateTitle, targetTitle) > 0;
+}
+
+// Artist credit separators. "feat"/"ft"/"with"/"x" need surrounding spaces so
+// ordinary names ("With Confidence", "Malcolm X", "Xzibit") stay intact.
+const ARTIST_SEPARATOR_REGEX =
+  /\s*,\s*|\s*;\s*|\s+&\s+|\s+with\s+|\s+[x×]\s+|\s+\/\s+|\s+(?:feat(?:uring)?|ft)\.?\s*/gi;
+
+/**
+ * Splits an artist credit into the main artist and the featured artists:
+ * "A ft. C & D" -> main "a", feats { "c", "d" }. Parts are normalized so
+ * accents, punctuation, and casing do not affect comparison.
+ */
+function parseArtistName(artistStr) {
+  const result = { main: '', feats: new Set() };
+  if (!artistStr || typeof artistStr !== 'string') return result;
+
+  const cleaned = artistStr.replace(/[()[\]{}]/g, ' ');
+  const parts = cleaned
+    .split(ARTIST_SEPARATOR_REGEX)
+    .map((part) => normalizeText(part))
+    .filter(Boolean);
+
+  if (parts.length === 0) return result;
+  result.main = parts[0];
+  for (const part of parts.slice(1)) {
+    if (part !== result.main) result.feats.add(part);
+  }
+  return result;
+}
+
+/**
+ * Weighted artist-set comparison:
+ *   1.00  same main artist and exactly the same featured artists
+ *   0.75  query asks for feat(s), candidate is the solo main artist
+ *   0.60  query is solo, candidate adds feat(s)
+ *   0.70  candidate contains every requested feat plus extras
+ *   0.30  same main artist but a different featured artist (wrong verse)
+ *   0.00  different main artist
+ * Returns null when the query has no artist to compare.
+ */
+function calculateArtistScore(queryArtistStr, candidateArtistStr) {
+  const query = parseArtistName(queryArtistStr);
+  if (!query.main) return null;
+
+  const candidate = parseArtistName(candidateArtistStr);
+  if (!candidate.main || candidate.main !== query.main) return 0;
+
+  const sameFeats = query.feats.size === candidate.feats.size
+    && [...query.feats].every((feat) => candidate.feats.has(feat));
+  if (sameFeats) return 1;
+
+  if (query.feats.size > 0 && candidate.feats.size === 0) return 0.75;
+  if (query.feats.size === 0 && candidate.feats.size > 0) return 0.6;
+
+  const hasAllQueryFeats = [...query.feats].every((feat) => candidate.feats.has(feat));
+  if (hasAllQueryFeats) return 0.7;
+
+  return 0.3;
+}
+
+/**
+ * Scores artist evidence only next to the target titles it belongs to. Pair
+ * each candidate with the target titles it matches and keep the best artist
+ * score from those pairs. Returns null when no title-matching target names an
+ * artist (nothing to check).
+ */
+function getBestArtistScore(candidate, pairings) {
+  const candidateTitle = getCandidateTitle(candidate);
+  let best = null;
+  for (const pairing of pairings) {
+    const title = pairing?.title ?? pairing?.targetTitle;
+    const artist = pairing?.artist ?? pairing?.targetArtist;
+    if (!artist || !title) continue;
+    if (!titlesMatch(candidateTitle, title)) continue;
+    const score = calculateArtistScore(artist, candidate.artistName);
+    if (score == null) continue;
+    if (best == null || score > best) best = score;
+  }
+  return best;
+}
+
+/**
+ * Overall match priority mirroring the ranking formula:
+ * title match x1000 + artist score x100 + synced x10. Title quality (exact vs
+ * fuzzy) is a tie-breaker so every title match gets the same primary weight.
+ */
+function calculateMatchPriority(titleScore, artistScore, candidate) {
+  return (titleScore > 0 ? 1000 : 0)
+    + ((artistScore ?? 0) * 100)
+    + (hasSyncedLyrics(candidate) ? 10 : 0);
+}
+
+function compareLyricsMatchPriority(left, right) {
+  return right.priorityScore - left.priorityScore;
+}
+
+// Automatic matching is deliberately stricter than manual search: a result
+// must resemble the actual song title and, when both durations are known, run
+// within 15 seconds of the file. This blocks "same artist, different song"
+// matches (for example a feature credit being mistaken for the title).
+const AUTO_MATCH_MIN_TITLE_SCORE = 0.4;
+const AUTO_MATCH_DURATION_TOLERANCE_SECONDS = 15;
+
+function isDurationCompatible(candidateDuration, targetDuration, tolerance = AUTO_MATCH_DURATION_TOLERANCE_SECONDS) {
+  const candidateSeconds = Number(candidateDuration) || 0;
+  const targetSeconds = Number(targetDuration) || 0;
+  // Unknown durations are not evidence of a mismatch.
+  if (candidateSeconds <= 0 || targetSeconds <= 0) return true;
+  return Math.abs(candidateSeconds - targetSeconds) <= tolerance;
+}
+
+/**
+ * Builds the trusted song-title candidates used by automatic matching. Only
+ * parsed title sides are used; feature credits such as "(ft. Anh Phan)" must
+ * never become a title target of their own. This is what prevents a different
+ * song by the same artist from winning on an artist-only coincidence.
+ */
+function getAutoMatchTitleTargets(rawTitle, parsed, hintLabel = '', hintParsed = null, extraTitles = []) {
+  const titles = [];
+  const seen = new Set();
+  const knownArtists = new Set(
+    [parsed?.artist, hintParsed?.artist]
+      .map((artist) => normalizeText(artist))
+      .filter(Boolean),
+  );
+
+  const add = (value) => {
+    const clean = stripExtraTitleDetails(value || '');
+    if (!clean || isJunkSegment(clean)) return;
+    const normalized = normalizeText(clean);
+    if (!normalized || seen.has(normalized)) return;
+    seen.add(normalized);
+    titles.push(clean);
+  };
+
+  add(parsed?.title);
+  add(hintParsed?.title);
+  for (const side of [
+    parsed?.split?.partA,
+    parsed?.split?.partB,
+    hintParsed?.split?.partA,
+    hintParsed?.split?.partB,
+  ]) {
+    const normalizedSide = normalizeText(stripExtraTitleDetails(side || ''));
+    if (!normalizedSide || knownArtists.has(normalizedSide)) continue;
+    add(side);
+  }
+  for (const extra of extraTitles) add(extra);
+
+  if (titles.length === 0) {
+    for (const segment of extractSegments(rawTitle).segments) add(segment);
+  }
+  if (titles.length === 0 && hintLabel) add(hintLabel);
+  return titles;
+}
+
+function getBestTitleMatchScore(candidateTitle, titleTargets) {
+  let best = 0;
+  for (const targetTitle of titleTargets) {
+    best = Math.max(best, calculateTitleScore(candidateTitle, targetTitle));
+  }
+  return best;
+}
+
+/**
+ * Trusted title/artist pairings for automatic matching. Unlike the manual
+ * search targets, feature credits are never promoted to standalone titles, and
+ * both orientations of an ambiguous filename split are kept so "Artist - Title"
+ * and "Title - Artist" can still resolve.
+ */
+function getAutoMatchArtistTargets(parsed, hintParsed = null, extraPairings = []) {
+  const targets = [];
+  const seen = new Set();
+
+  const add = (title, artist) => {
+    const cleanTitle = stripExtraTitleDetails(title || '');
+    // Keep feat credits in the artist string: calculateArtistScore needs them.
+    const cleanArtist = cleanTrackTitle(artist || '');
+    if (!cleanTitle || !cleanArtist) return;
+    const key = `${normalizeText(cleanTitle)}|${normalizeText(cleanArtist)}`;
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    targets.push({ title: cleanTitle, artist: cleanArtist });
+  };
+
+  add(parsed?.title, parsed?.artist);
+  add(hintParsed?.title, hintParsed?.artist);
+  for (const source of [parsed, hintParsed]) {
+    if (!source?.split) continue;
+    add(source.split.partA, source.split.partB);
+    add(source.split.partB, source.split.partA);
+  }
+  for (const pairing of extraPairings) {
+    add(pairing?.title, pairing?.artist);
+  }
+  return targets;
 }
 
 /**
@@ -1255,19 +1512,29 @@ async function fetchAdditionalLyrics(
     () => fetchLyricsPlus(title, artist, duration, isrc, signal),
   ];
 
+  let plainFallback = null;
   for (const fetchProvider of providers) {
     throwIfAborted(signal);
     try {
       const result = await fetchProvider();
-      if (result?.lines?.length && lyricsMatchOrientations(result, expectedOrientations)) {
-        return result;
+      if (
+        result?.lines?.length
+        && lyricsMatchOrientations(result, expectedOrientations)
+        // Providers sometimes return a different recording of the same title.
+        // When both durations are known, do not accept it automatically.
+        && isDurationCompatible(result.duration, duration)
+      ) {
+        // Prefer a timed result from any provider over an earlier plain-text
+        // one; keep the first plain result in case no provider has timings.
+        if (result.synced) return result;
+        if (!plainFallback) plainFallback = result;
       }
     } catch (error) {
       if (signal?.aborted || error?.name === 'AbortError') throw error;
       console.warn('Lyrics provider lookup failed:', error);
     }
   }
-  return null;
+  return plainFallback;
 }
 
 const musicBrainzCache = new Map();
@@ -1348,10 +1615,11 @@ function scoreMusicBrainzRecording(recording, targetTitle, targetArtist, duratio
   const recordingDuration = Number(recording.length || 0) / 1000;
   if (duration > 0 && recordingDuration > 0) {
     const difference = Math.abs(recordingDuration - duration);
+    // A known runtime far from the file's is strong evidence of a different
+    // recording, even when title/artist spellings agree.
+    if (difference > AUTO_MATCH_DURATION_TOLERANCE_SECONDS) return -1;
     if (difference <= 5) totalScore += 30;
-    else if (difference <= 15) totalScore += 20;
-    else if (difference <= 35) totalScore += 10;
-    else if (difference > 60) totalScore -= 30;
+    else totalScore += 20;
   }
 
   return totalScore;
@@ -1399,8 +1667,11 @@ async function resolveSplitByTitleEvidence(partA, partB, duration, rawTitle = ''
     const durationDifference = hasDurationEvidence
       ? Math.abs(durationSeconds - duration)
       : 0;
+    // Different runtime = different recording; do not let title evidence alone
+    // resolve it to this version.
+    if (hasDurationEvidence && durationDifference > AUTO_MATCH_DURATION_TOLERANCE_SECONDS) continue;
     const durationScore = hasDurationEvidence
-      ? (durationDifference <= 5 ? 30 : durationDifference <= 35 ? 10 : 0)
+      ? (durationDifference <= 5 ? 30 : 10)
       : 0;
     // A recording whose title also resembles the full raw label is preferred:
     // for "Time - Clock of the Heart" this blocks a wrong resolution to some
@@ -1528,16 +1799,19 @@ async function resolveWithMusicBrainz(rawTitle, rawArtist, duration, parsed, sig
         const durationDifference = hasDurationEvidence
           ? Math.abs(durationSeconds - duration)
           : 0;
+        const durationMismatch = hasDurationEvidence
+          && durationDifference > AUTO_MATCH_DURATION_TOLERANCE_SECONDS;
         const durationScore = !hasDurationEvidence
           ? 0
-          : durationDifference <= 5 ? 30 : durationDifference <= 35 ? 10 : durationDifference > 60 ? -30 : 0;
+          : durationDifference <= 5 ? 30 : durationDifference <= 15 ? 20 : 10;
         return {
           recording,
           score: (Number(recording.score) || 0) + coverage * 100 + durationScore,
           coverage,
+          durationMismatch,
         };
       })
-      .filter((match) => match.coverage >= 0.6)
+      .filter((match) => match.coverage >= 0.6 && !match.durationMismatch)
       .sort((a, b) => b.score - a.score);
 
     const bestDirect = directMatches[0];
@@ -1712,6 +1986,14 @@ function hasUsableLyrics(candidate) {
       (typeof candidate.plainLyrics === 'string' && candidate.plainLyrics.trim())
     )
   );
+}
+
+/**
+ * True when the candidate carries timed lyrics. Used by the priority check,
+ * where synced lyrics rank above plain text once title and artist match.
+ */
+function hasSyncedLyrics(candidate) {
+  return Boolean(candidate?.syncedLyrics && String(candidate.syncedLyrics).trim());
 }
 
 /**
@@ -2016,6 +2298,21 @@ export async function fetchLyrics(
   let { title, artist, versionTag, split, isOrientationUncertain } = parsed;
   if (!title) return null;
 
+  // Files under 1 minute 30 seconds are clips, intros, or stingers. Do not
+  // spend a lookup on them, and do not surface an older automatic match that
+  // may have been cached before the duration was known.
+  if (isLyricsTrackTooShort(duration)) {
+    return {
+      synced: false,
+      lines: [],
+      instrumental: false,
+      error: LYRICS_TOO_SHORT_MESSAGE,
+      trackName: cleanTrackTitle(title) || title,
+      artistName: artist || rawArtist,
+      source: 'duration',
+    };
+  }
+
   if (!forceRefresh) {
     const selectedLyrics = getSelectedLyrics(rawTitle, rawArtist, hintLabel);
     if (selectedLyrics) {
@@ -2046,15 +2343,16 @@ export async function fetchLyrics(
   }
 
   // ── Manual-search parity for automatic detection ────────────────────────────
-  // Build the same free-form label a user would paste into the search box, run
-  // the exact same ranking, and take the first usable result. This deliberately
-  // does not apply the old automatic candidate blacklist/threshold: if manual
-  // search would show it first, automatic lookup uses it too. Junk tags are
-  // already normalised by searchLyrics().
+  // Build the same free-form label a user would paste into the search box and
+  // reuse its ranking. Automatic selection then applies stricter safety guards
+  // below: a real title match and, when known, a compatible runtime. Junk tags
+  // are already normalised by searchLyrics().
   const autoSearchLabel = hintLabel
     || (/\s[-–—]\s/.test(rawTitle || '') ? rawTitle : '')
     || [rawArtist, rawTitle].filter(Boolean).join(' - ')
     || parsed.title;
+  const initialAutoTitleTargets = getAutoMatchTitleTargets(lookupTitle, parsed, hintLabel, hintParsed);
+  const initialAutoArtistTargets = getAutoMatchArtistTargets(parsed, hintParsed);
   if (autoSearchLabel) {
     try {
       const autoResults = await searchLyrics(autoSearchLabel, duration, {
@@ -2062,9 +2360,21 @@ export async function fetchLyrics(
         remember: false,
         signal,
       });
-      const autoTop = autoResults.find(
-        (candidate) => candidate.instrumental || candidate.syncedLyrics || candidate.plainLyrics,
-      );
+      const autoTop = autoResults.find((candidate) => {
+        if (!(candidate.instrumental || candidate.syncedLyrics || candidate.plainLyrics)) {
+          return false;
+        }
+        const candidateTitle = getCandidateTitle(candidate);
+        const titleScore = getBestTitleMatchScore(candidateTitle, initialAutoTitleTargets);
+        // Require a real title match, not merely a shared artist or feature
+        // credit, and reject recordings whose runtime is clearly different.
+        if (titleScore < AUTO_MATCH_MIN_TITLE_SCORE) return false;
+        if (!isDurationCompatible(candidate.duration, duration)) return false;
+        // Reject a different main artist; wrong-feat versions remain usable
+        // but have already been ranked below the solo/exact versions.
+        const artistScore = getBestArtistScore(candidate, initialAutoArtistTargets);
+        return artistScore == null || artistScore > 0;
+      });
       const autoFormatted = autoTop ? formatCandidateResult(autoTop) : null;
       if (autoFormatted && hasUsableLyrics(autoFormatted)) {
         saveSessionLyrics(rawTitle, rawArtist, autoFormatted);
@@ -2086,6 +2396,14 @@ export async function fetchLyrics(
     }
 
     const cleanCore = stripExtraTitleDetails(title);
+    const autoTitleTargets = getAutoMatchTitleTargets(
+      lookupTitle,
+      parsed,
+      hintLabel,
+      hintParsed,
+      [cleanCore, title],
+    );
+    const autoArtistTargets = getAutoMatchArtistTargets(parsed, hintParsed, [{ title, artist }]);
     const queries = [];
     const embeddedHints = inferEmbeddedArtistTitleHints(lookupTitle, rawArtist);
 
@@ -2202,12 +2520,10 @@ export async function fetchLyrics(
       }
     }
 
-    let firstMatch = null;
     let detectedTitle = cleanCore || title;
     let detectedArtist = artist;
-    let bestScore = -1;
-    let bestTargetTitle = '';
-    let bestTargetArtist = '';
+    let bestAnyMatch = null;
+    const scoredMatches = [];
     const candidatesById = new Map();
 
     // Collect every candidate first so ranking can weigh tokens by how rare
@@ -2251,23 +2567,65 @@ export async function fetchLyrics(
           bestQuery = q;
         }
       }
-      if (score > bestScore) {
-        firstMatch = candidate;
-        bestScore = score;
+      if (score <= 0) continue;
+
+      const titleScore = getBestTitleMatchScore(getCandidateTitle(candidate), autoTitleTargets);
+      const artistScore = getBestArtistScore(candidate, autoArtistTargets);
+      const match = {
+        candidate,
+        score,
+        bestQuery,
+        titleScore,
+        artistScore,
+        priorityScore: calculateMatchPriority(titleScore, artistScore, candidate),
+      };
+      scoredMatches.push(match);
+      if (!bestAnyMatch || score > bestAnyMatch.score) {
+        bestAnyMatch = match;
         detectedTitle = candidate.name || candidate.trackName || bestQuery.targetTitle;
         detectedArtist = candidate.artistName || bestQuery.targetArtist;
-        bestTargetTitle = bestQuery.targetTitle || '';
-        bestTargetArtist = bestQuery.targetArtist || '';
       }
     }
 
     // Do not silently show lyrics for a different song. With an artist we need
     // strong evidence from both fields; title-only lookups can accept an exact
     // title, but remain deliberately more conservative for fuzzy matches.
+    // Ranking uses titleScore x1000 + artistScore x100 + synced x10, so a solo
+    // main artist outranks a wrong-feat version and synced only breaks ties.
     const minimumAutoMatchScore = artist ? 125 : 90;
-    if (bestScore < minimumAutoMatchScore) {
-      firstMatch = null;
-    }
+    const chosenMatch = scoredMatches
+      .filter((match) =>
+        match.score >= minimumAutoMatchScore
+        // A different main artist is rejected outright; a wrong featured
+        // artist (0.30) stays eligible but ranks below the solo/exact versions.
+        && match.artistScore !== 0
+        // Same-artist/different-song matches and runtime outliers are not safe
+        // automatic associations, even if their lexical score is high.
+        && match.titleScore >= AUTO_MATCH_MIN_TITLE_SCORE
+        && isDurationCompatible(match.candidate.duration, duration),
+      )
+      .sort((left, right) =>
+        compareLyricsMatchPriority(left, right)
+        || right.titleScore - left.titleScore
+        || right.score - left.score,
+      )[0] || null;
+    const firstMatch = chosenMatch?.candidate || null;
+
+    // Fallback providers may use the reading LRCLIB discovered, but only when
+    // that reading itself passed the title and duration guards. Never let a
+    // rejected same-artist/different-song candidate steer the fallback search.
+    const fallbackEvidence = scoredMatches
+      .filter((match) =>
+        match.titleScore >= AUTO_MATCH_MIN_TITLE_SCORE
+        && isDurationCompatible(match.candidate.duration, duration),
+      )
+      .sort((left, right) =>
+        compareLyricsMatchPriority(left, right)
+        || right.titleScore - left.titleScore
+        || right.score - left.score,
+      )[0] || null;
+    const fallbackTargetTitle = fallbackEvidence?.bestQuery?.targetTitle || '';
+    const fallbackTargetArtist = fallbackEvidence?.bestQuery?.targetArtist || '';
 
     if (!firstMatch) {
       // The LRCLIB result set resolved which side of "A - B" is the title even
@@ -2291,11 +2649,11 @@ export async function fetchLyrics(
       };
 
       if (hintParsed?.title) addAttempt(hintParsed.title, hintParsed.artist);
-      if (bestTargetTitle) addAttempt(bestTargetTitle, bestTargetArtist);
+      if (fallbackTargetTitle) addAttempt(fallbackTargetTitle, fallbackTargetArtist);
       if (isOrientationUncertain && split) {
         addAttempt(split.partB, split.partA);
         addAttempt(split.partA, split.partB);
-      } else if (!bestTargetTitle) {
+      } else if (!fallbackTargetTitle) {
         addAttempt(cleanCore || title, artist);
       }
       if (attempts.length === 0) addAttempt(cleanCore || title, artist);
@@ -2879,20 +3237,40 @@ export async function searchLyrics(query, duration = 0, options = {}) {
       ),
     );
     return allCandidates
-      .map((candidate, index) => ({
-        candidate,
-        index,
-        durationDelta: duration > 0 && candidate.duration > 0
-          ? Math.abs(candidate.duration - duration)
-          : Number.MAX_SAFE_INTEGER,
-        score: Math.max(
-          scoreFreeformSearchCandidate(candidate, cleanQ, duration, idfFn),
-          ...targets.map((target) => scoreSearchCandidate(candidate, target, duration, idfFn)),
-        ),
-      }))
+      .map((candidate, index) => {
+        const freeformScore = scoreFreeformSearchCandidate(candidate, cleanQ, duration, idfFn);
+        let bestTarget = null;
+        let bestTargetScore = -1;
+        for (const target of targets) {
+          const targetScore = scoreSearchCandidate(candidate, target, duration, idfFn);
+          if (targetScore > bestTargetScore) {
+            bestTargetScore = targetScore;
+            bestTarget = target;
+          }
+        }
+        // A target is only meaningful when it outranks (or ties) the freeform
+        // reading; otherwise the query itself is the title being matched.
+        const useTarget = Boolean(bestTarget) && bestTargetScore >= freeformScore;
+        const candidateTitle = getCandidateTitle(candidate);
+        const titleScore = calculateTitleScore(candidateTitle, useTarget ? bestTarget.title : cleanQ);
+        const artistScore = getBestArtistScore(candidate, targets);
+        return {
+          candidate,
+          index,
+          durationDelta: duration > 0 && candidate.duration > 0
+            ? Math.abs(candidate.duration - duration)
+            : Number.MAX_SAFE_INTEGER,
+          score: Math.max(freeformScore, bestTargetScore),
+          titleScore,
+          artistScore,
+          priorityScore: calculateMatchPriority(titleScore, artistScore, candidate),
+        };
+      })
       .filter((entry) => entry.score > 0)
       .sort(
         (left, right) =>
+          compareLyricsMatchPriority(left, right) ||
+          right.titleScore - left.titleScore ||
           right.score - left.score ||
           left.durationDelta - right.durationDelta ||
           left.index - right.index,
@@ -2904,7 +3282,11 @@ export async function searchLyrics(query, duration = 0, options = {}) {
     const semanticByIndex = new Map();
     if (allowSemantic && entries.length > 1) {
       const semanticPool = [...entries]
-        .sort((left, right) => right.score - left.score)
+        .sort((left, right) =>
+          compareLyricsMatchPriority(left, right)
+          || right.titleScore - left.titleScore
+          || right.score - left.score,
+        )
         .slice(0, SEARCH_SEMANTIC_POOL_SIZE);
       const semanticScores = await getSemanticSearchScores(
         cleanQ,
@@ -2935,6 +3317,8 @@ export async function searchLyrics(query, duration = 0, options = {}) {
       })
       .sort(
         (left, right) =>
+          compareLyricsMatchPriority(left, right) ||
+          right.titleScore - left.titleScore ||
           right.combinedScore - left.combinedScore ||
           right.score - left.score ||
           left.durationDelta - right.durationDelta ||
@@ -2961,7 +3345,10 @@ export async function searchLyrics(query, duration = 0, options = {}) {
     && entries[0].score >= fastThreshold
     // A same-title cover with a wildly different runtime is not a safe
     // shortcut; let the full-text pass look for the recording that matches.
-    && (duration <= 0 || entries[0].durationDelta <= 20);
+    && (duration <= 0 || entries[0].durationDelta <= 20)
+    // Do not settle for plain lyrics while the broader pass might still find a
+    // time-synced version of the same song.
+    && entries.some((entry) => hasSyncedLyrics(entry.candidate));
 
   // 1. Cheap indexed lookup: the most likely title + artist orientation. This
   // is the one-round-trip path for an ordinary "Artist - Title" search. No

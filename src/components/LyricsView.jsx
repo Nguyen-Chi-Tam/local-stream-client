@@ -35,17 +35,19 @@ import {
   getSelectedLyrics,
   unlinkLyricsForTrack,
   clearUnlinkedLyricsForTrack,
+  isLyricsTrackTooShort,
+  LYRICS_TOO_SHORT_MESSAGE,
 } from '../functions/lyricsService.js';
 import { pickPathTitle } from '../functions/mediaUtils.js';
 import './LyricsView.css';
 
 const REALTIME_SYNC_KEY = 'localstream_lyrics_realtime_sync';
 const SEARCH_DEBOUNCE_MS = 350;
-const LYRICS_SEARCH_TIMEOUT_MS = 30000;
-const LYRICS_TIMEOUT_MESSAGE = 'Lyrics not found. The search timed out after 30 seconds.';
+const LYRICS_SEARCH_TIMEOUT_MS = 15000;
+const LYRICS_TIMEOUT_MESSAGE = 'Lyrics not found. The search timed out after 15 seconds.';
 const LYRICS_SEARCH_FAILED_MESSAGE = 'Lyrics not found. Check your connection and try again.';
 const LYRICS_UNLINKED_MESSAGE = 'Lyrics not found. This track is unlinked. Search manually to link lyrics again.';
-const MANUAL_SEARCH_TIMEOUT_MESSAGE = 'No lyrics found. The search timed out after 30 seconds.';
+const MANUAL_SEARCH_TIMEOUT_MESSAGE = 'No lyrics found. The search timed out after 15 seconds.';
 const MANUAL_SEARCH_FAILED_MESSAGE = 'Search failed. Check your connection and try again.';
 
 function loadRealtimeSyncEnabled() {
@@ -153,8 +155,11 @@ export default function LyricsView({
     && !/^(?:audio|song|track|video)\s*\d*$/i.test(parsedPath.artist),
   );
   const pathLookupLabel = pathLabelUsable ? pathTitle : '';
-  const displayTitle = cleanTrackTitle(lyricsData.trackName) || parsedCurrent.title || cleanTrackTitle(currentTitle);
-  const displayArtist = lyricsData.artistName || parsedCurrent.artist || currentArtist;
+  // The file's own tag/filename is the source of truth for the player label.
+  // Lyrics metadata is only a payload: a wrong automatic match must never
+  // rename the track that is actually playing.
+  const displayTitle = currentTitle || parsedCurrent.title || cleanTrackTitle(lyricsData.trackName);
+  const displayArtist = currentArtist || parsedCurrent.artist || lyricsData.artistName;
   // Build from parsed metadata rather than raw title + artist so a filename
   // like "Rick Astley - Never Gonna Give You Up (Video)" does not become
   // "Rick Astley - Never Gonna Give You Up Rick Astley" or carry a stale
@@ -196,6 +201,24 @@ export default function LyricsView({
     }
 
     if (!forceRefresh) {
+      // A clip/intro shorter than 1 minute 30 seconds should not display an
+      // automatic match found before its duration was known, or a cached
+      // result from a previous session. Manual search remains available.
+      if (isLyricsTrackTooShort(duration)) {
+        if (!isCurrentRequest()) return;
+        setLyricsData({
+          loading: false,
+          synced: false,
+          lines: [],
+          instrumental: false,
+          error: LYRICS_TOO_SHORT_MESSAGE,
+          unlinked: false,
+          trackName: cleanTrackTitle(title) || title,
+          artistName: artist,
+        });
+        return;
+      }
+
       const selectedLyrics = getSelectedLyrics(title, artist, lookupHint);
       if (selectedLyrics && (selectedLyrics.lines?.length > 0 || selectedLyrics.instrumental)) {
         if (!isCurrentRequest()) return;
@@ -844,8 +867,8 @@ export default function LyricsView({
       <button
         type="button"
         className="lyrics-icon-btn"
-        title="Unlink wrong lyrics and match again"
-        aria-label="Unlink wrong lyrics and match again"
+        title="Reset lyrics (unlink this match and search again)"
+        aria-label="Reset lyrics"
         onClick={handleUnlinkLyrics}
         disabled={isUnlinkingLyrics || !currentTitle}
       >
