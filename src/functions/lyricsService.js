@@ -6,6 +6,9 @@ const lyricsCache = new Map();
 // LRU cache for manual-search shortlists. Kept per app session so repeated
 // queries and backspacing do not hit LRCLIB again.
 const searchResultCache = new Map();
+// Tracks the user explicitly unlinked. Automatic lookup must return "not
+// found" for these until the user manually links lyrics again.
+const unlinkedLyricsCache = new Set();
 
 // Bracket words stripped from titles: video/audio production tags plus
 // album/track listing markers ("(Album 22 - Track No.10)"). Word boundaries
@@ -1614,6 +1617,7 @@ async function resolveWithMusicBrainz(rawTitle, rawArtist, duration, parsed, sig
 
 const SESSION_CACHE_PREFIX = 'local_stream_lyrics_session_';
 const SELECTED_LYRICS_PREFIX = 'local_stream_lyrics_selected_';
+const UNLINKED_LYRICS_PREFIX = 'local_stream_lyrics_unlinked_';
 
 /**
  * Derives normalized lookup keys for a track to ensure cache hits across
@@ -1642,6 +1646,60 @@ function getLookupKeys(rawTitle, rawArtist = '') {
   }
 
   return Array.from(keys);
+}
+
+function getUnlinkLookupKeys(rawTitle, rawArtist = '') {
+  const keys = getLookupKeys(rawTitle, rawArtist);
+  if (!String(rawArtist || '').trim()) return keys;
+  // With artist metadata available, keep tombstones artist-qualified so
+  // unlinking "Song" by one artist does not block a different artist's "Song".
+  return keys.filter((key) => {
+    const separator = key.indexOf('___');
+    return separator >= 0 && key.slice(separator + 3).trim().length > 0;
+  });
+}
+
+function markLyricsUnlinked(keys) {
+  for (const key of keys) {
+    unlinkedLyricsCache.add(key);
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem(UNLINKED_LYRICS_PREFIX + key, '1');
+      }
+    } catch {
+      // Storage unavailable; the in-memory marker still applies this session.
+    }
+  }
+}
+
+function clearLyricsUnlinked(keys) {
+  for (const key of keys) {
+    unlinkedLyricsCache.delete(key);
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.removeItem(UNLINKED_LYRICS_PREFIX + key);
+      }
+    } catch {
+      // Storage unavailable
+    }
+  }
+}
+
+function isLyricsUnlinked(rawTitle, rawArtist = '') {
+  if (!rawTitle) return false;
+  for (const key of getUnlinkLookupKeys(rawTitle, rawArtist)) {
+    if (unlinkedLyricsCache.has(key)) return true;
+    try {
+      if (typeof window !== 'undefined' && window.localStorage
+        && window.localStorage.getItem(UNLINKED_LYRICS_PREFIX + key)) {
+        unlinkedLyricsCache.add(key);
+        return true;
+      }
+    } catch {
+      // Storage unavailable
+    }
+  }
+  return false;
 }
 
 function hasUsableLyrics(candidate) {
@@ -1812,6 +1870,8 @@ export function getSessionLyrics(rawTitle, rawArtist = '', lookupHint = '') {
 export function saveSelectedLyrics(rawTitle, rawArtist = '', lyricsData) {
   if (!rawTitle || !hasUsableLyrics(lyricsData)) return;
   const keys = getLookupKeys(rawTitle, rawArtist);
+  // Re-linking lyrics manually clears the "do not auto-search" tombstone.
+  clearLyricsUnlinked(getUnlinkLookupKeys(rawTitle, rawArtist));
   // Mark new manual choices so they stay authoritative even when the provider
   // reports a different artist (covers, live versions, translations). Older
   // entries lack this marker and are checked against the track metadata once.
@@ -1867,9 +1927,10 @@ export function getSelectedLyrics(rawTitle, rawArtist = '', lookupHint = '') {
 }
 
 /**
- * Removes the saved lyrics association for a single track. This drops both the
- * explicit manual selection and the automatic session cache, so the track can
- * be matched again from scratch without affecting other songs.
+ * Removes the saved lyrics association for a single track. This drops the
+ * explicit manual selection, the automatic session cache, and the search cache,
+ * then marks the track as unlinked so automatic lookup returns "not found" until
+ * the user manually links lyrics again.
  */
 export function unlinkLyricsForTrack(rawTitle, rawArtist = '') {
   if (!rawTitle) return;
@@ -1889,6 +1950,18 @@ export function unlinkLyricsForTrack(rawTitle, rawArtist = '') {
       console.warn('Unable to unlink lyrics:', error);
     }
   }
+  // Keep automatic lookup from immediately re-finding the association the
+  // user just removed. A later manual selection clears this marker.
+  markLyricsUnlinked(getUnlinkLookupKeys(rawTitle, rawArtist));
+}
+
+/**
+ * Removes the "unlinked" marker for a track so automatic lookup may run again.
+ * Used by the "Find lyrics again" action.
+ */
+export function clearUnlinkedLyricsForTrack(rawTitle, rawArtist = '') {
+  if (!rawTitle) return;
+  clearLyricsUnlinked(getUnlinkLookupKeys(rawTitle, rawArtist));
 }
 
 /**
@@ -1896,12 +1969,13 @@ export function unlinkLyricsForTrack(rawTitle, rawArtist = '') {
  */
 export function clearSelectedLyrics() {
   lyricsCache.clear();
+  unlinkedLyricsCache.clear();
   try {
     if (typeof window !== 'undefined' && window.localStorage) {
       const keysToRemove = [];
       for (let index = 0; index < window.localStorage.length; index += 1) {
         const key = window.localStorage.key(index);
-        if (key?.startsWith(SELECTED_LYRICS_PREFIX)) {
+        if (key?.startsWith(SELECTED_LYRICS_PREFIX) || key?.startsWith(UNLINKED_LYRICS_PREFIX)) {
           keysToRemove.push(key);
         }
       }
@@ -1955,6 +2029,21 @@ export async function fetchLyrics(
   }
 
   throwIfAborted(signal);
+
+  // The user explicitly unlinked this track. Do not immediately search again —
+  // automatic lookup stays "not found" until they link lyrics manually.
+  if (isLyricsUnlinked(rawTitle, rawArtist)) {
+    return {
+      synced: false,
+      lines: [],
+      instrumental: false,
+      error: 'Lyrics not found. This track is unlinked.',
+      trackName: cleanTrackTitle(title) || title,
+      artistName: artist || rawArtist,
+      source: 'unlinked',
+      unlinked: true,
+    };
+  }
 
   // ── Manual-search parity for automatic detection ────────────────────────────
   // Build the same free-form label a user would paste into the search box, run

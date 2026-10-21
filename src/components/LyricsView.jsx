@@ -10,6 +10,7 @@ import {
   Search,
   AudioLines,
   Unlink,
+  RefreshCw,
   X,
   Disc,
   ZoomIn,
@@ -33,6 +34,7 @@ import {
   saveSelectedLyrics,
   getSelectedLyrics,
   unlinkLyricsForTrack,
+  clearUnlinkedLyricsForTrack,
 } from '../functions/lyricsService.js';
 import { pickPathTitle } from '../functions/mediaUtils.js';
 import './LyricsView.css';
@@ -42,6 +44,7 @@ const SEARCH_DEBOUNCE_MS = 350;
 const LYRICS_SEARCH_TIMEOUT_MS = 30000;
 const LYRICS_TIMEOUT_MESSAGE = 'Lyrics not found. The search timed out after 30 seconds.';
 const LYRICS_SEARCH_FAILED_MESSAGE = 'Lyrics not found. Check your connection and try again.';
+const LYRICS_UNLINKED_MESSAGE = 'Lyrics not found. This track is unlinked. Search manually to link lyrics again.';
 const MANUAL_SEARCH_TIMEOUT_MESSAGE = 'No lyrics found. The search timed out after 30 seconds.';
 const MANUAL_SEARCH_FAILED_MESSAGE = 'Search failed. Check your connection and try again.';
 
@@ -93,6 +96,7 @@ export default function LyricsView({
     lines: [],
     instrumental: false,
     error: null,
+    unlinked: false,
     trackName: '',
     artistName: '',
   });
@@ -201,6 +205,7 @@ export default function LyricsView({
           lines: selectedLyrics.lines || [],
           instrumental: Boolean(selectedLyrics.instrumental),
           error: selectedLyrics.error || null,
+          unlinked: false,
           trackName: cleanTrackTitle(selectedLyrics.trackName) || selectedLyrics.trackName || title,
           artistName: selectedLyrics.artistName || artist,
         });
@@ -216,6 +221,7 @@ export default function LyricsView({
           lines: sessionCached.lines || [],
           instrumental: Boolean(sessionCached.instrumental),
           error: sessionCached.error || null,
+          unlinked: false,
           trackName: cleanTrackTitle(sessionCached.trackName) || sessionCached.trackName || title,
           artistName: sessionCached.artistName || artist,
         });
@@ -259,6 +265,7 @@ export default function LyricsView({
           lines: res.lines || [],
           instrumental: Boolean(res.instrumental),
           error: res.error || null,
+          unlinked: Boolean(res.unlinked),
           trackName: cleanName,
           artistName: res.artistName || artist,
         };
@@ -271,6 +278,7 @@ export default function LyricsView({
           lines: [],
           instrumental: false,
           error: 'No lyrics found for this track.',
+          unlinked: false,
           trackName: title,
           artistName: artist,
         });
@@ -283,6 +291,7 @@ export default function LyricsView({
         lines: [],
         instrumental: false,
         error: timedOut ? LYRICS_TIMEOUT_MESSAGE : LYRICS_SEARCH_FAILED_MESSAGE,
+        unlinked: false,
         trackName: title,
         artistName: artist,
       });
@@ -320,6 +329,7 @@ export default function LyricsView({
       lines: [],
       instrumental: false,
       error: null,
+      unlinked: false,
       trackName: mediaTitle,
       artistName: mediaArtist,
     });
@@ -654,6 +664,7 @@ export default function LyricsView({
         lines: formatted.lines || [],
         instrumental: Boolean(formatted.instrumental),
         error: formatted.error || null,
+        unlinked: false,
         trackName: formatted.trackName,
         artistName: formatted.artistName,
       };
@@ -720,11 +731,39 @@ export default function LyricsView({
     if (isUnlinkingLyrics || !currentTitle) return;
     setIsUnlinkingLyrics(true);
     manualSelectionRef.current = null;
+    // Stop any automatic lookup already running; unlink must not start another
+    // one. The track stays marked as unlinked until the user picks lyrics
+    // manually.
+    lyricsRequestRef.current += 1;
+    if (lyricsAbortRef.current) {
+      lyricsAbortRef.current.abort();
+      lyricsAbortRef.current = null;
+    }
     unlinkLyricsForTrack(currentTitle, currentArtist);
     closeManualSearch();
     lineRefs.current = [];
     setCurrentActiveLyricIndex(-1);
-    // Drop the wrong association and run a fresh automatic match.
+    setLyricsData({
+      loading: false,
+      synced: false,
+      lines: [],
+      instrumental: false,
+      error: LYRICS_UNLINKED_MESSAGE,
+      unlinked: true,
+      trackName: cleanTrackTitle(currentTitle) || currentTitle,
+      artistName: currentArtist,
+    });
+    setIsUnlinkingLyrics(false);
+  };
+
+  const handleFindLyricsAgain = () => {
+    if (isUnlinkingLyrics || !currentTitle) return;
+    setIsUnlinkingLyrics(true);
+    manualSelectionRef.current = null;
+    clearUnlinkedLyricsForTrack(currentTitle, currentArtist);
+    closeManualSearch();
+    lineRefs.current = [];
+    setCurrentActiveLyricIndex(-1);
     setLyricsData((prev) => ({
       ...prev,
       loading: true,
@@ -732,6 +771,9 @@ export default function LyricsView({
       lines: [],
       instrumental: false,
       error: null,
+      unlinked: true,
+      trackName: cleanTrackTitle(currentTitle) || currentTitle,
+      artistName: currentArtist,
     }));
     loadLyrics(currentTitle, currentArtist, effectiveDur, true, pathLookupLabel).finally(() => {
       setIsUnlinkingLyrics(false);
@@ -786,6 +828,32 @@ export default function LyricsView({
   };
 
   // ── 7. Render Shared Sub-sections ──────────────────────────────────────────────
+  const renderMatchActionButton = () => (
+    lyricsData.unlinked ? (
+      <button
+        type="button"
+        className="lyrics-icon-btn"
+        title="Find lyrics again"
+        aria-label="Find lyrics again"
+        onClick={handleFindLyricsAgain}
+        disabled={isUnlinkingLyrics || lyricsData.loading || !currentTitle}
+      >
+        <RefreshCw size={14} />
+      </button>
+    ) : (
+      <button
+        type="button"
+        className="lyrics-icon-btn"
+        title="Unlink wrong lyrics and match again"
+        aria-label="Unlink wrong lyrics and match again"
+        onClick={handleUnlinkLyrics}
+        disabled={isUnlinkingLyrics || !currentTitle}
+      >
+        <Unlink size={14} />
+      </button>
+    )
+  );
+
   const renderLyricsContent = () => (
     <div
       ref={lyricsScrollRef}
@@ -1074,16 +1142,7 @@ export default function LyricsView({
             >
               <Search size={15} />
             </button>
-            <button
-              type="button"
-              className="lyrics-icon-btn"
-              title="Unlink wrong lyrics and match again"
-              aria-label="Unlink wrong lyrics and match again"
-              onClick={handleUnlinkLyrics}
-              disabled={isUnlinkingLyrics || !currentTitle}
-            >
-              <Unlink size={14} />
-            </button>
+            {renderMatchActionButton()}
             <button
               type="button"
               className={`lyrics-icon-btn lyrics-sync-btn${isRealtimeSync ? ' is-active' : ' is-inactive'}`}
@@ -1197,16 +1256,7 @@ export default function LyricsView({
               >
                 <Search size={15} />
               </button>
-              <button
-                type="button"
-                className="lyrics-icon-btn"
-                title="Unlink wrong lyrics and match again"
-                aria-label="Unlink wrong lyrics and match again"
-                onClick={handleUnlinkLyrics}
-                disabled={isUnlinkingLyrics || !currentTitle}
-              >
-                <Unlink size={14} />
-              </button>
+              {renderMatchActionButton()}
               <button
                 type="button"
                 className={`lyrics-icon-btn lyrics-sync-btn${isRealtimeSync ? ' is-active' : ' is-inactive'}`}
