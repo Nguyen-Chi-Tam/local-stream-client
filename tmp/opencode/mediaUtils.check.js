@@ -1,0 +1,453 @@
+import defaultArt from "../assets/default-art.png";
+import { publicAssetUrl } from "./publicAsset.js";
+export const defaultVideoArt = publicAssetUrl("default-video-art.png");
+export function getDefaultArtForType(mediaType) {
+  return String(mediaType || "").toUpperCase() === "VIDEO" ? defaultVideoArt : defaultArt;
+}
+export function pickPhotoSourceUrl(serverUrl, item) {
+  const id = getItemId(item);
+  const base = (serverUrl || "").replace(/\/$/, "");
+  if (base && id != null) {
+    return base + "/media/image/" + encodeURIComponent(id);
+  }
+  const directRaw = item && (item.url || item.streamUrl || item.fileUrl || item.location || item.path || item.filePath || item.fullPath || "");
+  const text = String(directRaw || "").trim();
+  if (!text) return "";
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(text)) {
+    return text;
+  }
+  if (!base) return text;
+  if (text.startsWith("/")) {
+    return base + text;
+  }
+  return base + "/" + text;
+}
+export function pickFolderName(item) {
+  const direct = item.folder || item.folderName || item.container || item.parent || item.parentTitle || "";
+  if (direct) return String(direct);
+  const path = item.path || item.filePath || item.filepath || item.fullPath || item.location || "";
+  if (path) {
+    const parts = String(path).split(/[\\/]+/).filter(Boolean);
+    if (parts.length > 0) {
+      if ((item.type || item.mediaType || item.kind || "").toUpperCase() === "IMAGE") {
+        return parts[parts.length - 2] || parts[parts.length - 1];
+      }
+      if (parts.length > 1) {
+        return parts[parts.length - 2];
+      }
+    }
+  }
+  return "Unknown folder";
+}
+export function getItemId(item) {
+  if (!item) return null;
+  const id = item.id ?? item.mediaId ?? item.videoId ?? item.imageId ?? item.audioId;
+  return id != null ? id : null;
+}
+const MOJIBAKE_BYTE_MAP = {
+  "\u9518": [239, 187, 191],
+  "\u8C29": [195, 161],
+  "\u8292": [195, 162],
+  "\u832B": [195, 163],
+  "\u76F2": [195, 164],
+  "\u732B": [195, 168],
+  "\u8305": [195, 169],
+  "\u951A": [195, 170],
+  "\u9753": [195, 172],
+  "\u8C8C": [195, 178],
+  "\u8D38": [195, 179],
+  "\u4E48": [195, 180],
+  "\u73AB": [195, 181],
+  "\u9709": [195, 185],
+  "\u7164": [195, 186],
+  "\u81BC": [196, 144],
+  "\u81BD": [196, 145],
+  "\u80F0": [225, 186],
+  "\u945E": [225, 187],
+  "\u5CC4": [225, 187],
+  "\u6190": [135],
+  "\u7576": [225, 186],
+  "\u010F\u0165\u017C": [239, 187, 191]
+};
+export function decodeMojibakeString(str) {
+  if (!str || typeof str !== "string") return str;
+  if (!isMojibake(str)) return str;
+  try {
+    const bytes = [];
+    let modified = false;
+    for (let i = 0; i < str.length; i++) {
+      const char = str[i];
+      if (MOJIBAKE_BYTE_MAP[char]) {
+        bytes.push(...MOJIBAKE_BYTE_MAP[char]);
+        modified = true;
+      } else {
+        const code = str.charCodeAt(i);
+        if (code <= 127) {
+          bytes.push(code);
+        } else if (code <= 255) {
+          bytes.push(code);
+          modified = true;
+        } else {
+          const encoded = new TextEncoder().encode(char);
+          bytes.push(...encoded);
+        }
+      }
+    }
+    if (modified) {
+      const decoded = new TextDecoder("utf-8", { fatal: true }).decode(new Uint8Array(bytes));
+      const cleaned = decoded.replace(/[\uFEFF\u0000]/g, "").trim();
+      if (cleaned && !isMojibake(cleaned)) {
+        return cleaned;
+      }
+    }
+  } catch {
+  }
+  try {
+    const latinBytes = new Uint8Array(str.length);
+    let validLatin1 = true;
+    for (let i = 0; i < str.length; i++) {
+      const c = str.charCodeAt(i);
+      if (c > 255) {
+        validLatin1 = false;
+        break;
+      }
+      latinBytes[i] = c;
+    }
+    if (validLatin1) {
+      const decoded = new TextDecoder("utf-8", { fatal: true }).decode(latinBytes);
+      const cleaned = decoded.replace(/[\uFEFF\u0000]/g, "").trim();
+      if (cleaned && !isMojibake(cleaned)) {
+        return cleaned;
+      }
+    }
+  } catch {
+  }
+  return str;
+}
+export function isMojibake(text) {
+  if (!text || typeof text !== "string") return false;
+  const globalArtifacts = /锘|谩|芒|茫|盲|猫|茅|锚|靓|貌|贸|么|玫|霉|鑞|煤|膼|膽|當|ďťż|Ã©|Ã³|Ã¡|Ã±|â€|Ðœ|Ð¾|ě|ŕ|ę|縑|縉|ď|ť|ż|盻|ｯ|雪|ｻ|ｩ|蘯|ハ|冢|ﾄ/i;
+  if (globalArtifacts.test(text)) return true;
+  if (text.includes("\u9518") || text.includes("\u8C29") || text.includes("\u7E11") || text.includes("\u7E09")) return true;
+  if (text.includes("\u010F\u0165\u017C") || text.includes("???") || text.includes("\uFFFD")) return true;
+  if (/[a-zA-Z\u00C0-\u024F\u1EA0-\u1EF9][\uFF61-\uFF9F]|[\uFF61-\uFF9F][a-zA-Z\u00C0-\u024F\u1EA0-\u1EF9]/.test(text)) return true;
+  if (/[\u4E00-\u9FFF\u3400-\u4DBF\uF900-\uFAFF][a-zA-Z\u00C0-\u024F\u1EA0-\u1EF9]|[a-zA-Z\u00C0-\u024F\u1EA0-\u1EF9][\u4E00-\u9FFF\u3400-\u4DBF\uF900-\uFAFF]/.test(text)) return true;
+  const hasCJK = /[\u4E00-\u9FFF\u3400-\u4DBF\uF900-\uFAFF]/.test(text);
+  const hasLatinLetters = /[a-zA-Z\u00C0-\u024F\u1EA0-\u1EF9]/.test(text);
+  if (hasCJK && hasLatinLetters) {
+    return true;
+  }
+  if (hasCJK) {
+    let hasHiddenSpace = false;
+    let hasInvalidByte = false;
+    for (let i = 0; i < text.length; i += 1) {
+      const code = text.charCodeAt(i);
+      if (code <= 255) continue;
+      const byte1 = code >> 8;
+      const byte2 = code & 255;
+      if (byte1 === 32 || byte2 === 32) {
+        hasHiddenSpace = true;
+      }
+      const isInvalidByte1 = byte1 < 32 && ![0, 9, 10, 13].includes(byte1);
+      const isInvalidByte2 = byte2 < 32 && ![0, 9, 10, 13].includes(byte2);
+      if (isInvalidByte1 || isInvalidByte2) {
+        hasInvalidByte = true;
+      }
+    }
+    if (hasHiddenSpace || hasInvalidByte) {
+      return true;
+    }
+  }
+  return false;
+}
+const VIETNAMESE_DIACRITICS = /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴÈÉẸẺẼÊỀẾỆỂỄÌÍỊỈĨÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠÙÚỤỦŨƯỪỨỰỬỮỲÝỴỶỸĐ]/g;
+export function isSilentlyStripped(id3Title, fallbackTitle, itemArtist) {
+  if (!id3Title || !fallbackTitle) return false;
+  const fullId3Context = id3Title + " " + (itemArtist || "");
+  const id3VnChars = (fullId3Context.match(VIETNAMESE_DIACRITICS) || []).length;
+  const fallbackVnChars = (fallbackTitle.match(VIETNAMESE_DIACRITICS) || []).length;
+  return fallbackVnChars > id3VnChars + 1;
+}
+export function extractTitleFromPath(path) {
+  if (!path) return "";
+  const parts = String(path).split(/[\\/]+/).filter(Boolean);
+  if (!parts.length) return "";
+  const fileNameWithExt = parts[parts.length - 1];
+  if (!fileNameWithExt) return "";
+  const lastDotIndex = fileNameWithExt.lastIndexOf(".");
+  if (lastDotIndex > 0) {
+    return fileNameWithExt.slice(0, lastDotIndex);
+  }
+  return fileNameWithExt;
+}
+const YOUTUBE_JUNK_TAG = "(?:official\\s*(?:music\\s*)?(?:video|audio|mv|m/v)?|music\\s*video|m/?v|lyrics?|lyric\\s*video|audio|karaoke|visualizer|performance|full\\s*hd|\\d{3,4}p|\\d{1,2}k|hd|uhd|4k|8k|remaster(?:ed)?|vietsub|engsub)";
+export function cleanYouTubeTitle(title) {
+  if (!title || typeof title !== "string") return "";
+  let clean = title.replace(/\.(?:mp3|flac|wav|m4a|aac|ogg|opus|wma|mp4|mkv|webm|avi)\b/gi, "").replace(/\s*[\[(][^()\[\]]*(?:official|music\s*video|m\/?v|lyrics?|audio|karaoke|visualizer|performance|full\s*hd|\d{3,4}p|\d{1,2}k|hd|uhd|4k|8k|remaster|vietsub|engsub)[^()\[\]]*[\])]/gi, "").trim();
+  const suffixPattern = new RegExp(
+    `\\s*(?:[|/\\\\\u2022\u2013\u2014~:]|\\s+-\\s+)\\s*${YOUTUBE_JUNK_TAG}(?:\\s*[|/\\\\\u2022\u2013\u2014~:]?\\s*${YOUTUBE_JUNK_TAG})*\\s*$`,
+    "i"
+  );
+  let previous;
+  do {
+    previous = clean;
+    clean = clean.replace(suffixPattern, "").trim();
+  } while (clean !== previous);
+  return clean.replace(/[\s|/\\•–—~:]+$/, "").replace(/\s+/g, " ").trim();
+}
+export function pickPathTitle(item) {
+  if (!item) return "";
+  const pathObj = item.path || item.filePath || item.filepath || item.fullPath || item.location || item.url || item.streamUrl || "";
+  const fromPath = extractTitleFromPath(pathObj);
+  if (!fromPath) return "";
+  const cleanFromPath = fromPath.replace(/\s*\([^)]*_(?:\d+K|\d+KB|\d+MB)\)\s*$/i, "").trim();
+  return cleanYouTubeTitle(cleanFromPath);
+}
+export function pickTitle(item) {
+  if (!item) return "Untitled";
+  const type = getMediaType(item);
+  const isImage = type === "IMAGE";
+  const pathObj = item.path || item.filePath || item.filepath || item.fullPath || item.location || item.url || item.streamUrl || "";
+  const fromPath = extractTitleFromPath(pathObj);
+  const cleanFromPath = fromPath ? fromPath.replace(/\s*\([^)]*_(?:\d+K|\d+KB|\d+MB)\)\s*$/i, "").trim() : "";
+  const normalizedPathTitle = cleanYouTubeTitle(cleanFromPath);
+  if (isImage) {
+    if (normalizedPathTitle) return normalizedPathTitle;
+    const raw2 = item.title || item.name || item.fileName || item.filename || "";
+    return cleanYouTubeTitle(String(raw2).trim()) || "Untitled";
+  }
+  const raw = item.title || item.name || item.fileName || item.filename || "";
+  const rawText = String(raw).trim();
+  const artist = item.artist || item.albumArtist || "";
+  const rawIsGarbled = isMojibake(rawText);
+  let text = rawText;
+  if (rawIsGarbled || !rawText) {
+    if (cleanFromPath && !isMojibake(cleanFromPath)) {
+      return normalizedPathTitle;
+    }
+    const decoded = decodeMojibakeString(rawText);
+    if (decoded && decoded !== rawText && !isMojibake(decoded)) {
+      text = decoded;
+    } else if (cleanFromPath) {
+      return normalizedPathTitle;
+    }
+  } else {
+    const decoded = decodeMojibakeString(rawText);
+    if (decoded && decoded !== rawText) {
+      if (isMojibake(decoded) || cleanFromPath && isSilentlyStripped(decoded, cleanFromPath, artist)) {
+        if (cleanFromPath && !isMojibake(cleanFromPath)) {
+          return normalizedPathTitle;
+        }
+      } else {
+        text = decoded;
+      }
+    }
+  }
+  if (!text || isMojibake(text) || cleanFromPath && isSilentlyStripped(text, cleanFromPath, artist)) {
+    if (cleanFromPath && !isMojibake(cleanFromPath)) {
+      return normalizedPathTitle;
+    }
+  }
+  text = cleanYouTubeTitle(text.replace(/\s*\([^)]*_(?:\d+K|\d+KB|\d+MB)\)\s*$/i, "").trim());
+  text = text.replace(/(\w)Ž(?=\s|$)/g, "$1\xAE");
+  text = text.replace(/[\uFEFF\uFFFD]/g, "").trim();
+  if (!text || isMojibake(text)) {
+    if (normalizedPathTitle) return normalizedPathTitle;
+  }
+  return text || normalizedPathTitle || "Untitled";
+}
+export function isUnknownArtist(text) {
+  if (!text) return true;
+  const lower = String(text).trim().toLowerCase();
+  if (!lower) return true;
+  return /^(?:<unknown(?:\s+artist)?>|\[unknown(?:\s+artist)?\]|\(unknown(?:\s+artist)?\)|unknown(?:\s+artist)?|<none>|none|<n\/a>|n\/a|null|undefined)$/i.test(lower);
+}
+export function pickArtist(item) {
+  if (!item) return "";
+  const raw = item && (item.artist || item.albumArtist || item.album) || "";
+  let text = String(raw).trim();
+  if (!text || isUnknownArtist(text) || isMojibake(text)) return "";
+  text = text.replace(/[\uFEFF\uFFFD]/g, "").trim();
+  if (isUnknownArtist(text) || isMojibake(text)) return "";
+  return text;
+}
+export function pickDateValue(item) {
+  if (!item) return 0;
+  const raw = item.date || item.added || item.addedAt || item.createdAt || item.modifiedAt || item.lastModified || item.mtime || item.timestamp || "";
+  if (!raw) {
+    const numericId = parseInt(item.id, 10);
+    if (!Number.isNaN(numericId)) return numericId;
+    return 0;
+  }
+  if (typeof raw === "number") return raw;
+  const numericRaw = Number(raw);
+  if (Number.isFinite(numericRaw)) return numericRaw;
+  const fromDate = Date.parse(String(raw));
+  if (Number.isNaN(fromDate)) return 0;
+  return fromDate;
+}
+export function normalizeDurationSeconds(raw, unit = "seconds") {
+  if (raw == null) return 0;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  if (unit === "milliseconds") {
+    return Math.round(n / 1e3);
+  }
+  return Math.round(n);
+}
+export function formatTime(seconds) {
+  const total = Math.max(0, Math.floor(seconds || 0));
+  const hrs = Math.floor(total / 3600);
+  const mins = Math.floor(total % 3600 / 60);
+  const secs = total % 60;
+  if (hrs > 0) {
+    return hrs + ":" + (mins < 10 ? "0" + mins : mins) + ":" + (secs < 10 ? "0" + secs : secs);
+  }
+  return mins + ":" + (secs < 10 ? "0" + secs : secs);
+}
+export function pickDuration(item) {
+  const s = pickDurationSeconds(item);
+  if (!s) return "";
+  return formatTime(s);
+}
+export function pickDurationSeconds(item) {
+  if (!item) return 0;
+  if (item.duration != null) {
+    return normalizeDurationSeconds(item.duration, "milliseconds");
+  }
+  return normalizeDurationSeconds(item.lengthSeconds ?? item.seconds);
+}
+export function pickRelativeOrAbsoluteUrl(serverUrl, raw) {
+  const text = String(raw || "").trim();
+  if (!text) return "";
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(text)) {
+    return text;
+  }
+  const base = (serverUrl || "").replace(/\/$/, "");
+  if (!base) return text;
+  if (text.startsWith("/")) {
+    return base + text;
+  }
+  return base + "/" + text;
+}
+export function pickThumbnailUrl(serverUrl, item, mediaTypeHint) {
+  const hintedType = String(mediaTypeHint || "").toUpperCase();
+  const type = String(mediaTypeHint || getMediaType(item) || "").toUpperCase();
+  if (!item) return hintedType === "VIDEO" ? defaultVideoArt : defaultArt;
+  const rawArt = item.albumArt || item.thumbnail || item.thumb || item.poster || item.preview || item.art || item.artwork || item.cover || item.picture || item.image || item.imageUrl || "";
+  const strArt = String(rawArt || "").trim();
+  if (strArt === "/thumbnail/album/3579481289389474209") {
+    return getDefaultArtForType(hintedType || getMediaType(item));
+  }
+  if (strArt) {
+    return pickRelativeOrAbsoluteUrl(serverUrl, strArt);
+  }
+  const fallbackArt = getDefaultArtForType(type);
+  if (type === "AUDIO") {
+    return defaultArt;
+  }
+  const id = getItemId(item);
+  if (id == null) return fallbackArt;
+  const base = (serverUrl || "").replace(/\/$/, "");
+  if (!base) return fallbackArt;
+  let mediaTypePath = "video";
+  if (type === "IMAGE") mediaTypePath = "image";
+  else if (type === "AUDIO") mediaTypePath = "audio";
+  return base + "/thumbnail/" + mediaTypePath + "/" + encodeURIComponent(id);
+}
+export function pickSourceUrl(serverUrl, item) {
+  const id = getItemId(item);
+  const base = (serverUrl || "").replace(/\/$/, "");
+  const type = item && (item.type || item.mediaType || item.kind || "").toUpperCase() || "";
+  let mediaTypePath = "video";
+  if (type === "IMAGE") mediaTypePath = "image";
+  else if (type === "AUDIO") mediaTypePath = "audio";
+  if (base && id != null) {
+    return base + "/media/" + mediaTypePath + "/" + encodeURIComponent(id);
+  }
+  const directRaw = item && (item.url || item.streamUrl || item.fileUrl || item.location || item.path || item.filePath || item.fullPath || "");
+  const direct = pickRelativeOrAbsoluteUrl(serverUrl, directRaw);
+  if (direct) return direct;
+  if (id == null) return "";
+  if (!base) return "";
+  return base + "/media/" + mediaTypePath + "/" + encodeURIComponent(id);
+}
+export function filterItems(items, query) {
+  if (!query) return items;
+  const q = String(query).trim().toLowerCase();
+  if (!q) return items;
+  return items.filter((item) => {
+    const fields = [
+      pickTitle(item),
+      item && (item.fileName || item.filename || item.name || "")
+    ];
+    return fields.filter(Boolean).join(" ").toLowerCase().includes(q);
+  });
+}
+export function sortItems(items, sortKey, isSortReversed) {
+  const arr = (items || []).slice();
+  const effectiveSortKey = !sortKey || sortKey === "original" ? "date" : sortKey;
+  arr.sort((a, b) => {
+    if (effectiveSortKey === "name") {
+      const an = pickTitle(a).toLowerCase();
+      const bn = pickTitle(b).toLowerCase();
+      if (an < bn) return -1;
+      if (an > bn) return 1;
+      return 0;
+    }
+    if (effectiveSortKey === "duration") {
+      const ad2 = pickDurationSeconds(a);
+      const bd2 = pickDurationSeconds(b);
+      return ad2 - bd2;
+    }
+    const ad = pickDateValue(a);
+    const bd = pickDateValue(b);
+    return ad - bd;
+  });
+  if (isSortReversed) arr.reverse();
+  return arr;
+}
+export function sortFolderKeys(keys, items, sortKey, isSortReversed, getFolderName = pickFolderName) {
+  const folderKeys = (keys || []).slice();
+  const effectiveSortKey = !sortKey || sortKey === "original" ? "date" : sortKey;
+  if (effectiveSortKey === "name") {
+    return folderKeys.sort((a, b) => {
+      const comparison = a.localeCompare(b, void 0, { sensitivity: "base" });
+      return isSortReversed ? -comparison : comparison;
+    });
+  }
+  const keySet = new Set(folderKeys);
+  const boundaryDateByFolder = /* @__PURE__ */ new Map();
+  (items || []).forEach((item) => {
+    const folder = getFolderName(item) || "Other";
+    if (!keySet.has(folder)) return;
+    const value = effectiveSortKey === "duration" ? pickDurationSeconds(item) : pickDateValue(item);
+    const current = boundaryDateByFolder.get(folder);
+    if (current == null || (effectiveSortKey === "duration" ? value > current : isSortReversed ? value > current : value < current)) {
+      boundaryDateByFolder.set(folder, value);
+    }
+  });
+  return folderKeys.sort((a, b) => {
+    const ad = boundaryDateByFolder.get(a) ?? 0;
+    const bd = boundaryDateByFolder.get(b) ?? 0;
+    if (ad !== bd) return isSortReversed ? bd - ad : ad - bd;
+    return a.localeCompare(b, void 0, { sensitivity: "base" });
+  });
+}
+export function getMediaType(item) {
+  if (!item) return "";
+  const raw = (item.type || item.mediaType || item.kind || "").toString().trim().toUpperCase();
+  if (raw === "IMAGE" || raw === "PHOTO" || raw === "PICTURE" || raw === "IMG") return "IMAGE";
+  if (raw === "AUDIO" || raw === "MUSIC" || raw === "SONG" || raw === "TRACK") return "AUDIO";
+  if (raw === "VIDEO" || raw === "MOVIE" || raw === "FILM" || raw === "VID") return "VIDEO";
+  if (raw === "OTHER" || raw === "FILE" || raw === "DOCUMENT" || raw === "DOC") return "OTHER";
+  const mime = (item.mime || item.mimeType || item.contentType || "").toString().toLowerCase();
+  if (mime.startsWith("image/")) return "IMAGE";
+  if (mime.startsWith("audio/")) return "AUDIO";
+  if (mime.startsWith("video/")) return "VIDEO";
+  const path = (item.path || item.filePath || item.fileName || item.filename || item.name || item.url || "").toString().toLowerCase();
+  if (/\.(jpe?g|png|gif|webp|heic|heif|svg|bmp|tiff?|raw|dng|ico|avif)$/i.test(path)) return "IMAGE";
+  if (/\.(mp3|flac|wav|aac|ogg|m4a|wma|opus|aiff?|alac)$/i.test(path)) return "AUDIO";
+  if (/\.(mp4|mkv|avi|mov|wmv|flv|webm|m4v|3gp|ts)$/i.test(path)) return "VIDEO";
+  return raw || "OTHER";
+}
