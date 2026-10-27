@@ -6,3 +6,4 @@ first_release/
 .DS_Store
 caddy.exe
 .opencode
+tmp/
