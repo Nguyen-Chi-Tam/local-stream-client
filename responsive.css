@@ -542,6 +542,19 @@
         height: 0.95rem;
     }
 
+    .server-qr-button {
+        flex: 0 0 2.45rem !important;
+        width: 2.45rem !important;
+        height: 2.45rem !important;
+        min-width: 2.45rem !important;
+        border-radius: 0.7rem !important;
+    }
+
+    .server-qr-button svg {
+        width: 0.95rem;
+        height: 0.95rem;
+    }
+
     select {
         padding: 0.6rem 0.75rem;
         font-size: 0.8rem;

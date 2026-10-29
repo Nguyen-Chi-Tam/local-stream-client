@@ -27,6 +27,8 @@ import {
   searchLyrics,
   getSearchSuggestions,
   getCachedSearchResults,
+  getTrackShortlist,
+  saveTrackShortlist,
   limitSearchQueryInput,
   normalizeText,
   formatCandidateResult,
@@ -65,6 +67,33 @@ const LYRICS_SOURCE_LABELS = {
 
 function formatLyricsSource(source) {
   return LYRICS_SOURCE_LABELS[source] || '';
+}
+
+/** Stable identity for a search candidate, used when merging cached lists. */
+function getCandidateKey(item) {
+  if (!item) return '';
+  if (item.id) return `id:${item.id}`;
+  return [
+    normalizeText(item.name || item.trackName || ''),
+    normalizeText(item.artistName || ''),
+    normalizeText(item.albumName || ''),
+    Math.round(Number(item.duration) || 0),
+  ].join('|');
+}
+
+/** Merges candidate lists (first list wins) without showing duplicates. */
+function mergeCandidateLists(...lists) {
+  const merged = [];
+  const seen = new Set();
+  for (const list of lists) {
+    for (const item of list || []) {
+      const key = getCandidateKey(item);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      merged.push(item);
+    }
+  }
+  return merged;
 }
 
 function isLyricsTrackTooShort(duration) {
@@ -617,6 +646,21 @@ export default function LyricsView({
     return suggestions.slice(0, 6);
   }, [trackSearchQuery, displayTitle]);
 
+  // True when a manual query is about the track that is playing, so its
+  // shortlist can be stored as that track's alternates. A search for some other
+  // song must not overwrite the current track's list.
+  const queryTargetsCurrentTrack = useCallback((query) => {
+    const normalizedQuery = normalizeText(query);
+    if (!normalizedQuery) return false;
+    const titleKey = normalizeText(cleanTrackTitle(currentTitle));
+    if (titleKey.length >= 2 && normalizedQuery.includes(titleKey)) {
+      const artistKey = normalizeText(currentArtist);
+      return !artistKey || normalizedQuery.includes(artistKey);
+    }
+    const labelKey = normalizeText(trackSearchQuery);
+    return Boolean(labelKey) && normalizedQuery === labelKey;
+  }, [currentTitle, currentArtist, trackSearchQuery]);
+
   const performSearch = useCallback(async (query) => {
     if (searchAbortRef.current) {
       searchAbortRef.current.abort();
@@ -657,6 +701,11 @@ export default function LyricsView({
       ]);
       if (searchRequestRef.current !== requestId) return;
       setSearchResults(results);
+      // Keep the alternates for the playing track so reopening the search box
+      // (or pasting the label in a different order) lists them instantly.
+      if (queryTargetsCurrentTrack(query)) {
+        saveTrackShortlist(currentTitle, currentArtist, results);
+      }
     } catch (err) {
       if (searchRequestRef.current !== requestId) return;
       console.error('Manual search error:', err);
@@ -671,7 +720,7 @@ export default function LyricsView({
         setIsSearching(false);
       }
     }
-  }, [effectiveDur]);
+  }, [effectiveDur, queryTargetsCurrentTrack, currentTitle, currentArtist]);
 
   const handleSearchInputChange = (val) => {
     const next = limitSearchQueryInput(val);
@@ -747,6 +796,11 @@ export default function LyricsView({
       setLyricsData(resultData);
       // Explicit user selections persist until the server is disconnected.
       saveSelectedLyrics(currentTitle, currentArtist, resultData);
+      // Remember the whole shortlist this pick came from, so the user can
+      // switch to a sibling result later without searching again.
+      if (searchResults?.length) {
+        saveTrackShortlist(currentTitle, currentArtist, searchResults);
+      }
     }
     closeManualSearch();
     lineRefs.current = [];
@@ -771,8 +825,12 @@ export default function LyricsView({
     setSearchQuery(initial);
     setSearchSuggestions(buildSearchSuggestions(initial));
     // Automatic lookup already ran the same free-form search, so reuse that
-    // shortlist instead of making the window open empty and wait again.
-    const instantResults = initial ? getCachedSearchResults(initial, effectiveDur) : [];
+    // shortlist instead of making the window open empty and wait again. The
+    // track-keyed shortlist is consulted too: it survives a different query
+    // order or a duration that arrived after the automatic lookup.
+    const cachedResults = initial ? getCachedSearchResults(initial, effectiveDur) : [];
+    const trackResults = getTrackShortlist(currentTitle, currentArtist);
+    const instantResults = mergeCandidateLists(trackResults, cachedResults);
     setSearchResults(instantResults.length > 0 ? instantResults : null);
     setIsManualSearchOpen(true);
     if (initial) {
@@ -1479,6 +1537,9 @@ export default function LyricsView({
 
                         {searchResults && searchResults.length > 0 && (
                           <div className="lyrics-dropdown-results select-none">
+                            {currentLyricsMatch && (
+                              <div className="lyrics-dropdown-section-label">All matches</div>
+                            )}
                             {searchResults.map((item) => (
                               <button
                                 key={item.id || `${item.name || item.trackName}_${item.artistName || ''}`}

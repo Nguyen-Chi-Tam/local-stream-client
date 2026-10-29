@@ -10,9 +10,13 @@
 // Bracket words stripped from titles: video/audio production tags plus
 // album/track listing markers ("(Album 22 - Track No.10)"). Word boundaries
 // keep real words such as "Soundtrack" and "albums" intact.
-export const JUNK_BRACKET_WORDS = 'official|m\/?v|video|audio|lyrics?|mp3|topic|hd|4k|remaster|sub|vietsub|karaoke|visualizer|teaser|parody|mashup|\balbum\b|\btrack\b|\d{3,4}p|x26[45]|h\.?26[45]|hevc|web-?dl|webrip|blu-?ray';
-export const JUNK_SQUARE_BRACKET_REGEX = new RegExp(`\[[^\]]*(?:${JUNK_BRACKET_WORDS})[^\]]*\]`, 'gi');
-export const JUNK_ROUND_BRACKET_REGEX = new RegExp(`\([^)]*(?:${JUNK_BRACKET_WORDS})[^)]*\)`, 'gi');
+// NOTE: this is a regex *source string*, so every backslash must be doubled.
+// A single "\b" in a JS string is a backspace character, and single "\(" or
+// "\[" disappear, turning the bracket expressions below into capture groups
+// that matched (and deleted) arbitrary text instead of the bracketed part.
+export const JUNK_BRACKET_WORDS = 'official|m/?v|video|audio|lyrics?|mp3|topic|hd|4k|remaster|sub|vietsub|karaoke|visualizer|teaser|parody|mashup|\\balbum\\b|\\btrack\\b|\\d{3,4}p|x26[45]|h\\.?26[45]|hevc|web-?dl|webrip|blu-?ray';
+export const JUNK_SQUARE_BRACKET_REGEX = new RegExp(`\\[[^\\]]*(?:${JUNK_BRACKET_WORDS})[^\\]]*\\]`, 'gi');
+export const JUNK_ROUND_BRACKET_REGEX = new RegExp(`\\([^)]*(?:${JUNK_BRACKET_WORDS})[^)]*\\)`, 'gi');
 
 /**
  * Remove audio/video file extensions, track numbers, quotes, and common YouTube video tags from a track title.

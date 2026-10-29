@@ -1468,6 +1468,66 @@ function lyricsMatchOrientations(lyricsData, orientations) {
   });
 }
 
+// ── Result shortlists ───────────────────────────────────────────────────────
+// Automatic lookup ranks a whole shortlist before it picks the one result to
+// display, then used to throw the rest away. Keeping that shortlist under the
+// track's lookup keys (not under the exact search text) lets the search popup
+// list the alternates immediately, even when the song is pasted in a different
+// order ("Kiếp Đỏ Đen - Duy Mạnh" vs. the metadata's artist-first label), so
+// switching versions/albums is one click instead of another round-trip.
+const trackShortlistCache = new Map();
+// Lookup keys, a few per track — plenty for the handful of tracks played in a
+// session without letting the cache grow without bound.
+const TRACK_SHORTLIST_MAX_ENTRIES = 96;
+
+/**
+ * Stores the ranked candidates a search produced for a track.
+ */
+export function saveTrackShortlist(rawTitle, rawArtist = '', results = []) {
+  if (!rawTitle || !Array.isArray(results)) return;
+  const usable = results.filter(
+    (candidate) => candidate
+      && isLyricsDurationAllowed(candidate)
+      && (candidate.instrumental || candidate.syncedLyrics || candidate.plainLyrics),
+  );
+  if (usable.length === 0) return;
+
+  for (const key of getLookupKeys(rawTitle, rawArtist)) {
+    if (trackShortlistCache.has(key)) trackShortlistCache.delete(key);
+    trackShortlistCache.set(key, usable);
+  }
+  while (trackShortlistCache.size > TRACK_SHORTLIST_MAX_ENTRIES) {
+    const oldestKey = trackShortlistCache.keys().next().value;
+    trackShortlistCache.delete(oldestKey);
+  }
+}
+
+/**
+ * Returns the shortlist stored for a track, if a lookup already ran for it.
+ */
+export function getTrackShortlist(rawTitle, rawArtist = '') {
+  if (!rawTitle) return [];
+  for (const key of getLookupKeys(rawTitle, rawArtist)) {
+    const results = trackShortlistCache.get(key);
+    if (results?.length) return results;
+  }
+  return [];
+}
+
+/**
+ * Drops the stored shortlist for a track (or every track when no title is
+ * given), so an explicit "try again" is not answered from stale candidates.
+ */
+export function clearTrackShortlists(rawTitle, rawArtist = '') {
+  if (!rawTitle) {
+    trackShortlistCache.clear();
+    return;
+  }
+  for (const key of getLookupKeys(rawTitle, rawArtist)) {
+    trackShortlistCache.delete(key);
+  }
+}
+
 /**
  * Saves a track's lyrics to memory and browser sessionStorage for the session.
  */
@@ -1604,6 +1664,7 @@ export function unlinkLyricsForTrack(rawTitle, rawArtist = '') {
   // An unlink is an explicit "try again", so do not let a cached search
   // shortlist immediately reproduce the association the user just removed.
   searchResultCache.clear();
+  clearTrackShortlists(rawTitle, rawArtist);
 
   for (const key of keys) {
     lyricsCache.delete(key);
@@ -1623,6 +1684,7 @@ export function unlinkLyricsForTrack(rawTitle, rawArtist = '') {
  */
 export function clearSelectedLyrics() {
   lyricsCache.clear();
+  trackShortlistCache.clear();
   try {
     if (typeof window !== 'undefined') {
       const sessionKeysToRemove = [];
@@ -1726,6 +1788,9 @@ export async function fetchLyrics(
         remember: false,
         signal,
       });
+      // Keep every ranked candidate for this track, not just the winner, so
+      // the manual search popup can offer the alternates instantly.
+      saveTrackShortlist(rawTitle, rawArtist, autoResults);
       const autoTop = autoResults.find(
         (candidate) => candidate.instrumental || candidate.syncedLyrics || candidate.plainLyrics,
       );
