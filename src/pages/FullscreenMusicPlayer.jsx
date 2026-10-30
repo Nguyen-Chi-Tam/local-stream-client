@@ -343,7 +343,7 @@ export default function FullscreenMusicPlayer({
   // gesture: scroll up fills the frame, scroll down fits it. Gated to the same
   // conditions as the button so it never zooms a hidden or shrunken frame.
   function handleArtWheel(event) {
-    if (!(isPlayerFullscreen || isLargeLayout) || showLyrics || isShrunk) return;
+    if (!(isPlayerFullscreen || isLargeLayout) || showLyrics) return;
     if (!event.deltaY) return;
     const next = event.deltaY < 0;
     setIsArtZoomed((prev) => (prev === next ? prev : next));
@@ -466,7 +466,7 @@ export default function FullscreenMusicPlayer({
             src={displayArtUrl}
             alt={pickTitle(currentlyPlaying)}
             draggable={false}
-            style={{ objectFit: isArtZoomed && !isShrunk ? 'cover' : undefined, pointerEvents: 'auto', WebkitTouchCallout: 'default', borderRadius: 'inherit' }}
+              style={{ objectFit: isArtZoomed && !isShrunk ? 'cover' : 'contain', pointerEvents: 'auto', WebkitTouchCallout: 'default', borderRadius: 'inherit', transition: 'transform 240ms cubic-bezier(0.22, 1, 0.36, 1), object-fit 200ms', transform: isArtZoomed && !isShrunk ? 'scale(1.05)' : 'scale(1)', willChange: 'transform', width: '100%', height: '100%' }}
             onError={() => {
               if (displayArtUrl !== defaultArt) {
                 setDisplayArtUrl(defaultArt);

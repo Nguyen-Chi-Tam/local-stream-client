@@ -1391,6 +1391,13 @@ export default function LyricsView({
                   draggable={false}
                   style={{
                     objectFit: isArtZoomed ? 'cover' : 'contain',
+                    pointerEvents: 'auto',
+                    WebkitTouchCallout: 'default',
+                    transition: 'transform 240ms cubic-bezier(0.22, 1, 0.36, 1), object-fit 200ms',
+                    transform: isArtZoomed ? 'scale(1.05)' : 'scale(1)',
+                    willChange: 'transform',
+                    width: '100%',
+                    height: '100%',
                   }}
                   onError={(e) => {
                     if (defaultArt && e.currentTarget.src !== defaultArt) {

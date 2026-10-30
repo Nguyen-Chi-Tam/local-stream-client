@@ -171,6 +171,14 @@ export default function App() {
     const currentItem = playbackSnapshot?.item;
     const playbackTitle = formatPlaybackTitle(currentItem);
 
+    // Key off the item's display identity (not just the snapshot reference) so
+    // the title updates even when the current track object is mutated in place
+    // rather than replaced — otherwise a song change can silently leave a stale
+    // tab title.
+    const itemKey = currentItem
+      ? `${pickTitle(currentItem)}||${pickArtist(currentItem)}||${playbackSnapshot?.type}`
+      : '';
+
     // If currently playing audio/video anywhere, or if paused on the current section:
     const isCurrentSectionPlayback =
       (section === 'music' && playbackSnapshot?.type === 'music') ||
@@ -186,7 +194,7 @@ export default function App() {
     if (document.title !== nextTitle) {
       document.title = nextTitle;
     }
-  }, [isConnected, section, playbackSnapshot]);
+  }, [isConnected, section, playbackSnapshot, itemKey]);
 
   if (!section || !isConnected) {
     return <ConnectPage onConnected={handleConnected} />;
