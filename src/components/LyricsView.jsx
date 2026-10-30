@@ -205,6 +205,38 @@ export default function LyricsView({
   const timeTextRef = useRef(null);
   const isScrubbingRef = useRef(false);
 
+  const artFrameRef = useRef(null);
+  const artImgRef = useRef(null);
+  const [fillScale, setFillScale] = useState(1);
+
+  function computeLyricsArtFillScale() {
+    const frame = artFrameRef.current;
+    const img = artImgRef.current;
+    if (!frame || !img || !img.naturalWidth || !img.naturalHeight) return 1;
+    const rect = frame.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return 1;
+    const fitW = rect.width / img.naturalWidth;
+    const fitH = rect.height / img.naturalHeight;
+    const contain = Math.min(fitW, fitH);
+    const cover = Math.max(fitW, fitH);
+    return Math.max((cover / contain) * 1.002, 1);
+  }
+
+  // Recompute the fill scale whenever the image loads or the frame resizes so
+  // "fill" always covers the entire frame exactly (cover-equivalent).
+  useEffect(() => {
+    const frame = artFrameRef.current;
+    const refresh = () => setFillScale(computeLyricsArtFillScale());
+    refresh();
+    const ro = new ResizeObserver(refresh);
+    if (frame) ro.observe(frame);
+    window.addEventListener('resize', refresh);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', refresh);
+    };
+  }, []);
+
   const effectiveDur = currentDuration || (currentlyPlaying && pickDurationSeconds ? pickDurationSeconds(currentlyPlaying) : 0) || 0;
   const effectiveTime = audioRef?.current && Number.isFinite(audioRef.current.currentTime) ? audioRef.current.currentTime : currentTime;
 
@@ -1269,6 +1301,7 @@ export default function LyricsView({
   const handleArtWheel = (e) => {
     if (!e.deltaY) return;
     const next = e.deltaY < 0;
+    setFillScale(computeLyricsArtFillScale());
     setIsArtZoomed((prev) => (prev === next ? prev : next));
   };
 
@@ -1356,6 +1389,7 @@ export default function LyricsView({
           <div className="lyrics-landscape-art-box select-none">
             <div className="lyrics-landscape-info-wrapper select-none">
               <div
+                ref={artFrameRef}
                 className="lyrics-landscape-art-frame player-art-frame select-none"
                 role="button"
                 tabIndex={0}
@@ -1385,19 +1419,22 @@ export default function LyricsView({
                   style={{ backgroundImage: `url(${artSrc})` }}
                 />
                 <img
+                  ref={artImgRef}
                   className={`lyrics-landscape-art-img player-art-foreground select-none${isArtZoomed ? ' is-art-zoomed' : ''}`}
                   src={artSrc}
                   alt={displayTitle}
                   draggable={false}
+                  onLoad={() => setFillScale(computeLyricsArtFillScale())}
                   style={{
-                    objectFit: isArtZoomed ? 'cover' : 'contain',
+                    objectFit: 'contain',
                     pointerEvents: 'auto',
                     WebkitTouchCallout: 'default',
-                    transition: 'transform 240ms cubic-bezier(0.22, 1, 0.36, 1), object-fit 200ms',
-                    transform: isArtZoomed ? 'scale(1.05)' : 'scale(1)',
-                    willChange: 'transform',
                     width: '100%',
                     height: '100%',
+                    transformOrigin: 'center',
+                    willChange: 'transform',
+                    transition: 'transform 0.5s cubic-bezier(0.22, 1, 0.36, 1) !important',
+                    transform: `scale(${isArtZoomed ? fillScale : 1})`,
                   }}
                   onError={(e) => {
                     if (defaultArt && e.currentTarget.src !== defaultArt) {
@@ -1412,6 +1449,7 @@ export default function LyricsView({
                   title={isArtZoomed ? 'Show full album art — scroll to zoom' : 'Fill album art frame — scroll to zoom'}
                   onClick={(e) => {
                     e.stopPropagation();
+                    setFillScale(computeLyricsArtFillScale());
                     setIsArtZoomed((prev) => !prev);
                   }}
                 >

@@ -25,6 +25,12 @@ function isElectronRuntime() {
   );
 }
 
+// Duration/ease for the fit↔fill zoom animation.
+const ART_ZOOM_DURATION = 0.5;
+const ART_ZOOM_EASE = 'cubic-bezier(0.22, 1, 0.36, 1)';
+// Small epsilon so the scaled-up art certainly covers the frame (no 1px gaps).
+const COVER_EPSILON = 1.002;
+
 export default function FullscreenMusicPlayer({
   currentlyPlaying,
   currentArtUrl,
@@ -63,6 +69,27 @@ export default function FullscreenMusicPlayer({
   const artTouchStartRef = useRef(null);
   const artPinchRef = useRef(null);
   const artButtonRef = useRef(null);
+  const artFrameRef = useRef(null);
+  const artImgRef = useRef(null);
+
+  // Scale that turns the contain-fitted artwork into a full-frame fill
+  // (cover-equivalent), computed from natural size vs. frame size.
+  const [fillScale, setFillScale] = useState(1);
+
+  // How much to scale the contain-fitted artwork so it exactly covers the frame
+  // (cover-equivalent: fills the whole frame with the minimal necessary crop).
+  function computeArtFillScale() {
+    const frame = artFrameRef.current;
+    const img = artImgRef.current;
+    if (!frame || !img || !img.naturalWidth || !img.naturalHeight) return 1;
+    const rect = frame.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return 1;
+    const fitW = rect.width / img.naturalWidth;
+    const fitH = rect.height / img.naturalHeight;
+    const contain = Math.min(fitW, fitH);
+    const cover = Math.max(fitW, fitH);
+    return Math.max((cover / contain) * COVER_EPSILON, 1);
+  }
 
   const playedRef = useRef(null);
   const rangeInputRef = useRef(null);
@@ -135,6 +162,23 @@ export default function FullscreenMusicPlayer({
       if (miniTimeTextRef.current) miniTimeTextRef.current.textContent = formatted;
     }
   }, [currentTime, currentDuration, currentlyPlaying, formatTime, pickDurationSeconds, audioRef]);
+
+  // Recompute the fill scale whenever the image loads or the frame resizes so
+  // "fill" always covers the entire frame exactly (cover-equivalent).
+  useEffect(() => {
+    const frame = artFrameRef.current;
+    const refresh = () => {
+      setFillScale(computeArtFillScale());
+    };
+    refresh();
+    const ro = new ResizeObserver(refresh);
+    if (frame) ro.observe(frame);
+    window.addEventListener('resize', refresh);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', refresh);
+    };
+  }, []);
 
   function handleSeekInstant(e) {
     const val = typeof e === 'number' ? e : (Number(e?.target?.value) || 0);
@@ -331,6 +375,7 @@ export default function FullscreenMusicPlayer({
 
     if (event.cancelable) event.preventDefault();
     if (distanceRatio >= 1.08) {
+      setFillScale(computeArtFillScale());
       setIsArtZoomed(true);
     } else if (distanceRatio <= 0.92) {
       setIsArtZoomed(false);
@@ -346,6 +391,7 @@ export default function FullscreenMusicPlayer({
     if (!(isPlayerFullscreen || isLargeLayout) || showLyrics) return;
     if (!event.deltaY) return;
     const next = event.deltaY < 0;
+    setFillScale(computeArtFillScale());
     setIsArtZoomed((prev) => (prev === next ? prev : next));
   }
 
@@ -456,17 +502,32 @@ export default function FullscreenMusicPlayer({
           }
         }}
       >
-        <div className="player-art-frame select-none" onWheel={handleArtWheel}>
+        <div ref={artFrameRef} className="player-art-frame select-none" onWheel={handleArtWheel}>
           <div
             className="player-art-frame-blur select-none"
             style={{ backgroundImage: `url(${displayArtUrl})` }}
           />
           <img
+            ref={artImgRef}
             className={`player-art-foreground select-none${isArtZoomed && !isShrunk ? ' is-art-zoomed' : ''}`}
             src={displayArtUrl}
             alt={pickTitle(currentlyPlaying)}
             draggable={false}
-              style={{ objectFit: isArtZoomed && !isShrunk ? 'cover' : 'contain', pointerEvents: 'auto', WebkitTouchCallout: 'default', borderRadius: 'inherit', transition: 'transform 240ms cubic-bezier(0.22, 1, 0.36, 1), object-fit 200ms', transform: isArtZoomed && !isShrunk ? 'scale(1.05)' : 'scale(1)', willChange: 'transform', width: '100%', height: '100%' }}
+            onLoad={() => setFillScale(computeArtFillScale())}
+            style={{
+              objectFit: isPlayerFullscreen ? 'contain' : 'cover',
+              pointerEvents: 'auto',
+              WebkitTouchCallout: 'default',
+              borderRadius: 'inherit',
+              width: '100%',
+              height: '100%',
+              transformOrigin: 'center',
+              willChange: 'transform',
+              transition: `transform ${ART_ZOOM_DURATION}s ${ART_ZOOM_EASE}`,
+              transform: `scale(${
+                isPlayerFullscreen && isArtZoomed && !isShrunk ? fillScale : 1
+              })`,
+            }}
             onError={() => {
               if (displayArtUrl !== defaultArt) {
                 setDisplayArtUrl(defaultArt);
@@ -484,6 +545,7 @@ export default function FullscreenMusicPlayer({
               onTouchEnd={(event) => event.stopPropagation()}
               onClick={(event) => {
                 event.stopPropagation();
+                setFillScale(computeArtFillScale());
                 setIsArtZoomed((prev) => !prev);
               }}
             >

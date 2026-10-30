@@ -3945,13 +3945,17 @@ input[type='search']::-ms-reveal {
   mask-image: radial-gradient(white, black);
   box-shadow: none;
   animation: none;
+  transform: scale(1);
+  transform-origin: center;
+  will-change: transform;
+  transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .music-player-active #player .player-art img.player-art-foreground.is-art-zoomed {
-  object-fit: cover !important;
+  object-fit: contain !important;
 }
 
-.music-page.has-playing:not(.music-player-active) #player .player-art img.player-art-foreground.is-art-zoomed {
+.music-page.has-playing:not(.music-player-active) #player .player-art img.player-art-foreground.is-art-zoomed  {
   object-fit: cover !important;
 }
 

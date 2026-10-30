@@ -158,6 +158,14 @@ export default function App() {
   const section = getSectionFromPath(path);
 
 
+  // Key off the item's display identity (not just the snapshot reference) so
+  // the title updates even when the current track object is mutated in place
+  // rather than replaced — otherwise a song change can silently leave a stale
+  // tab title.
+  const itemKey = playbackSnapshot?.item
+    ? `${pickTitle(playbackSnapshot.item)}||${pickArtist(playbackSnapshot.item)}||${playbackSnapshot?.type}`
+    : '';
+
   // Update document.title based on media type and active playback (Spotify-style)
   useEffect(() => {
     if (!isConnected || !section) {
@@ -170,14 +178,6 @@ export default function App() {
     const isPlaying = !!playbackSnapshot?.isPlaying;
     const currentItem = playbackSnapshot?.item;
     const playbackTitle = formatPlaybackTitle(currentItem);
-
-    // Key off the item's display identity (not just the snapshot reference) so
-    // the title updates even when the current track object is mutated in place
-    // rather than replaced — otherwise a song change can silently leave a stale
-    // tab title.
-    const itemKey = currentItem
-      ? `${pickTitle(currentItem)}||${pickArtist(currentItem)}||${playbackSnapshot?.type}`
-      : '';
 
     // If currently playing audio/video anywhere, or if paused on the current section:
     const isCurrentSectionPlayback =
