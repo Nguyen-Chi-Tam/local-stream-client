@@ -8,12 +8,10 @@ import {
   Pause,
   Rewind,
   FastForward,
-  ZoomIn,
-  ZoomOut,
   X,
 } from 'lucide-react';
 import { MorphIcon } from 'morphicons/react';
-import { Play as MorphPlay, Pause as MorphPause } from 'lucide';
+import { Play as MorphPlay, Pause as MorphPause, Maximize2 as MorphMaximize2, Minimize2 as MorphMinimize2 } from 'lucide';
 import AnimatedMediaButton from '../components/AnimatedMediaButton.jsx';
 import LyricsView from '../components/LyricsView.jsx';
 import { dequeueNext } from '../functions/queueService.js';
@@ -341,6 +339,16 @@ export default function FullscreenMusicPlayer({
     }
   }
 
+  // Wheel over the album art mirrors the corner zoom button and the pinch
+  // gesture: scroll up fills the frame, scroll down fits it. Gated to the same
+  // conditions as the button so it never zooms a hidden or shrunken frame.
+  function handleArtWheel(event) {
+    if (!(isPlayerFullscreen || isLargeLayout) || showLyrics || isShrunk) return;
+    if (!event.deltaY) return;
+    const next = event.deltaY < 0;
+    setIsArtZoomed((prev) => (prev === next ? prev : next));
+  }
+
   function handleArtTouchEnd(event) {
     if (artPinchRef.current) {
       artPinchRef.current = null;
@@ -448,7 +456,7 @@ export default function FullscreenMusicPlayer({
           }
         }}
       >
-        <div className="player-art-frame select-none">
+        <div className="player-art-frame select-none" onWheel={handleArtWheel}>
           <div
             className="player-art-frame-blur select-none"
             style={{ backgroundImage: `url(${displayArtUrl})` }}
@@ -470,7 +478,7 @@ export default function FullscreenMusicPlayer({
               type="button"
               className="player-art-zoom-button select-none"
               aria-label={isArtZoomed ? 'Show full album art' : 'Fill album art frame'}
-              title={isArtZoomed ? 'Show full album art' : 'Fill album art frame'}
+              title={isArtZoomed ? 'Show full album art — scroll to zoom' : 'Fill album art frame — scroll to zoom'}
               onPointerDown={(event) => event.stopPropagation()}
               onTouchStart={(event) => event.stopPropagation()}
               onTouchEnd={(event) => event.stopPropagation()}
@@ -479,7 +487,11 @@ export default function FullscreenMusicPlayer({
                 setIsArtZoomed((prev) => !prev);
               }}
             >
-              {isArtZoomed ? <ZoomOut size={16} /> : <ZoomIn size={16} />}
+              <MorphIcon
+                size={16}
+                spring="snappy"
+                icon={isArtZoomed ? MorphMinimize2 : MorphMaximize2}
+              />
             </button>
           )}
         </div>

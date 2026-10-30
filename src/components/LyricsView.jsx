@@ -9,15 +9,19 @@ import {
   MicOff,
   Search,
   AudioLines,
-  Unlink,
-  RefreshCw,
-  X,
   Disc,
-  ZoomIn,
-  ZoomOut,
 } from 'lucide-react';
 import { MorphIcon } from 'morphicons/react';
-import { Play as MorphPlay, Pause as MorphPause } from 'lucide';
+import {
+  Play as MorphPlay,
+  Pause as MorphPause,
+  Search as MorphSearch,
+  RefreshCw as MorphRefresh,
+  X as MorphX,
+  EyeOff as MorphEyeOff,
+  Maximize2 as MorphMaximize2,
+  Minimize2 as MorphMinimize2,
+} from 'lucide';
 import { ClipLoader } from 'react-spinners';
 import AnimatedMediaButton from './AnimatedMediaButton.jsx';
 import {
@@ -63,6 +67,22 @@ const LYRICS_SOURCE_LABELS = {
   lyricsplus: 'LyricsPlus',
   'youtube-music': 'YouTube Music',
   musicbrainz: 'MusicBrainz',
+};
+
+// Attribution links per source. BiniLyrics is now lrc.red (same project,
+// renamed); the BetterLyrics API serves betterlyrics.org; the LyricsPlus
+// mirrors expose no project page, so the first mirror's own landing page is
+// the most truthful "where it came from" target.
+const LYRICS_SOURCE_URLS = {
+  lrclib: 'https://lrclib.net',
+  binilyrics: 'https://lrc.red',
+  'lrc.red': 'https://lrc.red',
+  betterlyrics: 'https://betterlyrics.org',
+  'betterlyrics-qq': 'https://betterlyrics.org',
+  'betterlyrics-kugou': 'https://betterlyrics.org',
+  lyricsplus: 'https://lyricsplus.prjktla.my.id',
+  'youtube-music': 'https://music.youtube.com',
+  musicbrainz: 'https://musicbrainz.org',
 };
 
 function formatLyricsSource(source) {
@@ -991,11 +1011,15 @@ export default function LyricsView({
       onClick={handleUnlinkLyrics}
       disabled={!currentTitle}
     >
-      {isUnlinkingLyrics || lyricsData.loading
-        ? <X size={14} />
-        : lyricsData.instrumental || lyricsData.lines?.length > 0
-          ? <Unlink size={14} />
-          : <RefreshCw size={14} />}
+      <MorphIcon
+        size={14}
+        spring="snappy"
+        icon={isUnlinkingLyrics || lyricsData.loading
+          ? MorphX
+          : lyricsData.instrumental || lyricsData.lines?.length > 0
+            ? MorphEyeOff
+            : MorphRefresh}
+      />
     </button>
   );
 
@@ -1077,16 +1101,31 @@ export default function LyricsView({
       )}
 
       {lyricsData.lines.length > 0 && !lyricsData.loading && (
-        <div className="lyrics-attribution select-none">
-          <a
-            href="https://lrclib.net"
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={(e) => e.stopPropagation()}
-          >
-            Lyrics by lrc.red
-          </a>
-        </div>
+        (() => {
+          // Credit the provider the lyrics were actually fetched from, and
+          // link there — not a hardcoded lrclib URL that lies whenever the
+          // fallback providers won.
+          const source = lyricsData.source || 'lrclib';
+          const sourceUrl = source === 'youtube-music'
+            ? `https://music.youtube.com/search?q=${encodeURIComponent(
+              [lyricsData.trackName, lyricsData.artistName].filter(Boolean).join(' '),
+            )}`
+            : (LYRICS_SOURCE_URLS[source] || LYRICS_SOURCE_URLS.lrclib);
+          const sourceLabel = formatLyricsSource(source) || 'lrclib';
+          return (
+            <div className="lyrics-attribution select-none">
+              <a
+                href={sourceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                title={`Lyrics from ${sourceLabel} — open the provider`}
+              >
+                Lyrics by {sourceLabel}
+              </a>
+            </div>
+          );
+        })()
       )}
     </div>
   );
@@ -1223,6 +1262,16 @@ export default function LyricsView({
     </div>
   );
 
+  // Mouse wheel over the album art mirrors the corner zoom button: scrolling
+  // up fills the frame, scrolling down fits it again. Direction-based rather
+  // than a toggle, so trackpad inertia or a fast spin settles on a stable
+  // state instead of flickering between the two.
+  const handleArtWheel = (e) => {
+    if (!e.deltaY) return;
+    const next = e.deltaY < 0;
+    setIsArtZoomed((prev) => (prev === next ? prev : next));
+  };
+
   return (
     <div className={`lyrics-view-root select-none${isClosing ? ' is-closing' : ''}`}>
       {/* Blurred album artwork background */}
@@ -1281,11 +1330,11 @@ export default function LyricsView({
           <div className="lyrics-header-actions select-none">
             <button
               type="button"
-              className="lyrics-icon-btn"
+              className={`lyrics-icon-btn${isManualSearchOpen ? ' is-close-active' : ''}`}
               title="Search lyrics"
               onClick={toggleManualSearch}
             >
-              <Search size={15} />
+              <MorphIcon size={15} spring="snappy" icon={isManualSearchOpen ? MorphX : MorphSearch} />
             </button>
             {renderMatchActionButton()}
             <button
@@ -1312,6 +1361,7 @@ export default function LyricsView({
                 tabIndex={0}
                 aria-label="Show music list (F)"
                 title="Show music list (F)"
+                onWheel={handleArtWheel}
                 onClick={() => {
                   if (onExitToSmallPlayer) {
                     onExitToSmallPlayer();
@@ -1352,13 +1402,17 @@ export default function LyricsView({
                   type="button"
                   className="player-art-zoom-button select-none"
                   aria-label={isArtZoomed ? 'Show full album art' : 'Fill album art frame'}
-                  title={isArtZoomed ? 'Show full album art' : 'Fill album art frame'}
+                  title={isArtZoomed ? 'Show full album art — scroll to zoom' : 'Fill album art frame — scroll to zoom'}
                   onClick={(e) => {
                     e.stopPropagation();
                     setIsArtZoomed((prev) => !prev);
                   }}
                 >
-                  {isArtZoomed ? <ZoomOut size={16} /> : <ZoomIn size={16} />}
+                  <MorphIcon
+                    size={16}
+                    spring="snappy"
+                    icon={isArtZoomed ? MorphMinimize2 : MorphMaximize2}
+                  />
                 </button>
               </div>
 
@@ -1395,11 +1449,11 @@ export default function LyricsView({
             <div className="lyrics-landscape-header select-none">
               <button
                 type="button"
-                className="lyrics-icon-btn"
+                className={`lyrics-icon-btn${isManualSearchOpen ? ' is-close-active' : ''}`}
                 title="Search lyrics"
                 onClick={toggleManualSearch}
               >
-                <Search size={15} />
+                <MorphIcon size={15} spring="snappy" icon={isManualSearchOpen ? MorphX : MorphSearch} />
               </button>
               {renderMatchActionButton()}
               <button
@@ -1443,15 +1497,6 @@ export default function LyricsView({
                     ) : (
                       <Search size={16} />
                     )}
-                  </button>
-                  <button
-                    type="button"
-                    className="lyrics-search-close-btn"
-                    title="Close search"
-                    aria-label="Close search"
-                    onClick={closeManualSearch}
-                  >
-                    <X size={16} />
                   </button>
                 </form>
 
