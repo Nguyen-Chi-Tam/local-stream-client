@@ -3,6 +3,8 @@ import { AudioLines, Play, ChevronUp, ChevronDown, ChevronLeft, Folder, Delete, 
 
 import defaultArt from '../assets/default-art.png';
 import { clearMediaCache, fetchMediaItemsCached, getCachedMediaItems, getMediaEndpoint } from '../functions/mediaApiCache.js';
+import { classifyMediaLoadError, logMediaLoadError } from '../functions/mediaFetchError.js';
+import ErrorAlert from '../components/ErrorAlert.jsx';
 import Header from '../components/Header.jsx';
 import { SkeletonMediaItem } from '../components/Skeleton.jsx';
 import MusicPlayer from '../components/MusicPlayer.jsx';
@@ -515,11 +517,12 @@ export default function MediaPage({
       })
       .catch((err) => {
         if (cancelled) return;
-        console.error(err);
+        const classified = classifyMediaLoadError(err, { serverUrl, endpoint });
+        logMediaLoadError(endpoint, err, classified);
         setError(
-          'Could not load music from ' +
-          endpoint +
-          '. Make sure LocalStream is running and CORS is enabled.'
+          classified.httpSwitchUrl
+            ? { message: classified.message, httpSwitchUrl: classified.httpSwitchUrl }
+            : classified.message
         );
       })
       .finally(() => {
@@ -1408,18 +1411,8 @@ export default function MediaPage({
               Loading music from LocalStream…
             </div>
           )}
-          {error && !loading && (
-            <div id="error" className="error">
-              <span>{error}</span>
-              <button
-                type="button"
-                className="alert-dismiss"
-                onClick={() => setError('')}
-                aria-label="Dismiss error"
-              >
-                <X size={16} />
-              </button>
-            </div>
+          {!loading && (
+            <ErrorAlert id="error" error={error} onDismiss={() => setError('')} />
           )}
 
           {!loading && !error && !hasItems && (

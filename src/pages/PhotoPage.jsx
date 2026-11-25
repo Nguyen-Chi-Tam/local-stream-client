@@ -3,6 +3,8 @@ import { Folder, ChevronUp, ChevronDown, ChevronLeft, Delete, X, ArrowUp, ArrowD
 import JSZip from 'jszip';
 
 import { clearMediaCache, fetchMediaItemsCached, getMediaEndpoint } from '../functions/mediaApiCache.js';
+import { classifyMediaLoadError, logMediaLoadError } from '../functions/mediaFetchError.js';
+import ErrorAlert from '../components/ErrorAlert.jsx';
 import { proxyServerUrl } from '../functions/desktopBridge.js';
 import Header from '../components/Header.jsx';
 import PhotoViewPage from './PhotoViewPage.jsx';
@@ -338,11 +340,12 @@ export default function PhotoPage({
       })
       .catch((err) => {
         if (cancelled) return;
-        console.error(err);
+        const classified = classifyMediaLoadError(err, { serverUrl, endpoint });
+        logMediaLoadError(endpoint, err, classified);
         setError(
-          'Could not load media from ' +
-            endpoint +
-            '. Make sure LocalStream is running and CORS is enabled.'
+          classified.httpSwitchUrl
+            ? { message: classified.message, httpSwitchUrl: classified.httpSwitchUrl }
+            : classified.message
         );
       })
       .finally(() => {
@@ -827,18 +830,8 @@ export default function PhotoPage({
       <main className="page photo-page media-page-layout">
         <section className="media-list-column card full photo-player-card">
           {loading && <div className="info">Loading media from LocalStream...</div>}
-          {error && !loading && (
-            <div className="error">
-              <span>{error}</span>
-              <button 
-                type="button" 
-                className="alert-dismiss" 
-                onClick={() => setError('')}
-                aria-label="Dismiss error"
-              >
-                <X size={16} />
-              </button>
-            </div>
+          {!loading && (
+            <ErrorAlert error={error} onDismiss={() => setError('')} />
           )}
 
           <div className={`toolbar-row${isSearchExpanded || searchQuery ? ' search-active' : ''}`}>

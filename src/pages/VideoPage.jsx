@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { AudioLines, Play, Pause, Rewind, FastForward, SkipBack, SkipForward, Folder, ChevronUp, ChevronDown, ChevronLeft, Maximize, Minimize, PictureInPicture2, Repeat, AppWindow, Square, Delete, X, ArrowUp, ArrowDown, RefreshCw, Search } from 'lucide-react';
 
 import { clearMediaCache, fetchMediaItemsCached, getMediaEndpoint } from '../functions/mediaApiCache.js';
+import { classifyMediaLoadError, logMediaLoadError } from '../functions/mediaFetchError.js';
+import ErrorAlert from '../components/ErrorAlert.jsx';
 import Header from '../components/Header.jsx';
 import { SkeletonMediaItem } from '../components/Skeleton.jsx';
 import VideoPlayer from '../components/VideoPlayer.jsx';
@@ -687,11 +689,12 @@ export default function VideoPage({
       })
       .catch((err) => {
         if (cancelled) return;
-        console.error(err);
+        const classified = classifyMediaLoadError(err, { serverUrl, endpoint });
+        logMediaLoadError(endpoint, err, classified);
         setError(
-          'Could not load media from ' +
-            endpoint +
-            '. Make sure LocalStream is running and CORS is enabled.'
+          classified.httpSwitchUrl
+            ? { message: classified.message, httpSwitchUrl: classified.httpSwitchUrl }
+            : classified.message
         );
       })
       .finally(() => {
@@ -2406,18 +2409,8 @@ export default function VideoPage({
           (selectedVideo ? ' has-playing' : '')
         }>
           {loading && <div className="info">Loading media from LocalStream...</div>}
-          {error && !loading && (
-            <div id="error" className="error">
-              <span>{error}</span>
-              <button 
-                type="button" 
-                className="alert-dismiss" 
-                onClick={() => setError('')}
-                aria-label="Dismiss error"
-              >
-                <X size={16} />
-              </button>
-            </div>
+          {!loading && (
+            <ErrorAlert id="error" error={error} onDismiss={() => setError('')} />
           )}
 
           {!loading && !error && sortedItems.length === 0 && (

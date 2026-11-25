@@ -5,6 +5,7 @@ import VideoPage from './pages/VideoPage.jsx';
 import PhotoPage from './pages/PhotoPage.jsx';
 import QueueToast from './components/QueueToast.jsx';
 import { clearMediaCache } from './functions/mediaApiCache.js';
+import { extractServerFromHash } from './functions/mediaFetchError.js';
 import { pickTitle, pickArtist } from './functions/mediaUtils.js';
 import { clearSelectedLyrics } from './functions/lyricsService.js';
 
@@ -115,6 +116,18 @@ export default function App() {
 
   useEffect(() => {
     try {
+      const fromHash = extractServerFromHash(window.location.hash);
+      if (fromHash) {
+        window.localStorage.setItem(STORAGE_KEY, fromHash);
+        window.history.replaceState(
+          window.history.state || {},
+          '',
+          `${window.location.pathname}${window.location.search}`
+        );
+        setServerUrl(fromHash);
+        return;
+      }
+
       const existing = window.localStorage.getItem(STORAGE_KEY) || '';
       if (existing) {
         setServerUrl(existing);

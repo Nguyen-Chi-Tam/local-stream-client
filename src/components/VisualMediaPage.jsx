@@ -4,6 +4,8 @@ import { MorphIcon } from 'morphicons/react';
 import { Play as MorphPlay, Pause as MorphPause } from 'lucide';
 import AnimatedMediaButton from './AnimatedMediaButton.jsx';
 import { fetchMediaItemsCached, getMediaEndpoint } from '../functions/mediaApiCache.js';
+import { classifyMediaLoadError, logMediaLoadError } from '../functions/mediaFetchError.js';
+import ErrorAlert from './ErrorAlert.jsx';
 import SortDropdown from './SortDropdown.jsx';
 import MediaItem from './MediaItem.jsx';
 import PhotoItem from './PhotoItem.jsx';
@@ -205,11 +207,12 @@ export default function VisualMediaPage({
       })
       .catch((err) => {
         if (cancelled) return;
-        console.error(err);
+        const classified = classifyMediaLoadError(err, { serverUrl, endpoint });
+        logMediaLoadError(endpoint, err, classified);
         setError(
-          'Could not load media from ' +
-            endpoint +
-            '. Make sure LocalStream is running and CORS is enabled.'
+          classified.httpSwitchUrl
+            ? { message: classified.message, httpSwitchUrl: classified.httpSwitchUrl }
+            : classified.message
         );
       })
       .finally(() => {
@@ -390,7 +393,7 @@ export default function VisualMediaPage({
       <main className="page">
         <section className="card full">
           {loading && <div className="info">Loading media from LocalStream...</div>}
-          {error && !loading && <div className="error">{error}</div>}
+          {!loading && <ErrorAlert error={error} onDismiss={() => setError('')} />}
           {!loading && !error && sorted.length === 0 && (
             <div className="info">{emptyText}</div>
           )}

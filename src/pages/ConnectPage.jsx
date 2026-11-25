@@ -2,7 +2,14 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { createLucideIcon, Mail, X, Play, Pause, SkipBack, SkipForward, Rewind, FastForward, RotateCcw, ChevronLeft, ChevronRight, QrCode } from 'lucide-react';
 import QrScannerModal from '../components/QrScannerModal.jsx';
+import ErrorAlert from '../components/ErrorAlert.jsx';
 import { publicAssetUrl } from '../functions/publicAsset.js';
+import { proxyServerUrl } from '../functions/desktopBridge.js';
+import {
+  STRICT_HTTP_SERVER_REGEX,
+  getHttpSwitchUrl,
+  isMixedContentUrl,
+} from '../functions/mediaFetchError.js';
 
 // Brand icons removed in lucide-react 1.0+ - provided here as local SVGs
 const Youtube = createLucideIcon('Youtube', [
@@ -268,8 +275,7 @@ export default function ConnectPage({ onConnected }) {
     const url = normalizeUrl(value);
 
     // Enforce strict http://<ip_address>:<port_number> or http://localhost:<port_number> format
-    const ipPortRegex = /^http:\/\/(?:(?:\d{1,3}\.){3}\d{1,3}|localhost):\d{1,5}$/;
-    if (!ipPortRegex.test(url)) {
+    if (!STRICT_HTTP_SERVER_REGEX.test(url)) {
       setError('Invalid format. Please use the format: http://<ip_address>:<port_number> (e.g. http://192.168.1.4:8080)');
       return;
     }
@@ -299,8 +305,7 @@ export default function ConnectPage({ onConnected }) {
     setValue(extracted);
 
     // Strict URL check
-    const ipPortRegex = /^http:\/\/(?:(?:\d{1,3}\.){3}\d{1,3}|localhost):\d{1,5}$/;
-    if (ipPortRegex.test(extracted)) {
+    if (STRICT_HTTP_SERVER_REGEX.test(extracted)) {
       try {
         window.localStorage.setItem(STORAGE_KEY, extracted);
         setRecentServers((prev) => {
@@ -318,6 +323,19 @@ export default function ConnectPage({ onConnected }) {
       setError(`Scanned address "${extracted}" does not match the expected http://<ip>:<port> format.`);
     }
   }, [onConnected]);
+
+  const normalizedPreview = normalizeUrl(value);
+  const mixedContentSwitchUrl = isMixedContentUrl(proxyServerUrl(normalizedPreview))
+    ? getHttpSwitchUrl(normalizedPreview)
+    : null;
+  const mixedContentNotice = mixedContentSwitchUrl
+    ? {
+        message:
+          'This page is loaded over HTTPS, so browsers block connections to local HTTP servers. ' +
+          'Open the HTTP version of this site or use the desktop app.',
+        httpSwitchUrl: mixedContentSwitchUrl,
+      }
+    : null;
 
   return (
     <main className="page page-connect">
@@ -440,19 +458,8 @@ export default function ConnectPage({ onConnected }) {
                 <button type="submit" className="connect-submit-button">Continue</button>
               </form>
 
-              {error && (
-                <div id="error" className="error">
-                  <span>{error}</span>
-                  <button
-                    type="button"
-                    className="alert-dismiss"
-                    onClick={() => setError('')}
-                    aria-label="Dismiss error"
-                  >
-                    <X size={16} />
-                  </button>
-                </div>
-              )}
+              <ErrorAlert id="error" error={error} onDismiss={() => setError('')} />
+              {!error && <ErrorAlert error={mixedContentNotice} />}
             </div>
           </div>
         </div>
