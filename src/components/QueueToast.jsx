@@ -15,6 +15,8 @@ import {
   Trash2,
   X,
   Mic2,
+  Copy,
+  ArrowDownToLine,
 } from 'lucide-react';
 import { subscribeQueueToast } from '../functions/queueService.js';
 import { pickTitle } from '../functions/mediaUtils.js';
@@ -139,6 +141,8 @@ export default function QueueToast() {
     if (action === 'lyrics') return <Mic2 size={16} />;
     if (action === 'speed') return <Gauge size={16} />;
     if (action === 'scaling') return <Scaling size={16} />;
+    if (action === 'copy') return <Copy size={16} />;
+    if (action === 'download') return <ArrowDownToLine size={16} />;
     return <ListPlus size={16} />;
   };
 

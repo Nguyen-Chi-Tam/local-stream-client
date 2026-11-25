@@ -1462,14 +1462,16 @@
         height: 100% !important;
         max-width: 100% !important;
         max-height: 100% !important;
-        object-fit: cover !important;
+        object-fit: contain !important;
         border-radius: calc(var(--fullscreen-art-radius, 1rem) - 1.5px) !important;
         clip-path: inset(0 round calc(var(--fullscreen-art-radius, 1rem) - 1.5px)) !important;
         box-shadow: none !important;
-        transform: none !important;
         animation: none !important;
         -webkit-mask-image: none !important;
         mask-image: none !important;
+        transform-origin: center !important;
+        will-change: transform !important;
+        transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1) !important;
     }
 
     .music-page.has-playing:not(.music-player-active) #player .player-art-frame {
@@ -1478,6 +1480,9 @@
         position: relative !important;
         overflow: hidden !important;
         border-radius: inherit !important;
+        -webkit-mask-image: -webkit-radial-gradient(white, black) !important;
+        mask-image: radial-gradient(white, black) !important;
+        isolation: isolate !important;
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;

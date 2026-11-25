@@ -1,7 +1,7 @@
 import { scoreLyricsCandidates } from './lyricsSearchEngine.js';
 
 /**
- * Lexical lyrics search scoring runs on its own worker thread. The Electron
+ * Lexical lyrics search scoring runs on its own worker thread. The desktop
  * and browser UIs are single-threaded; ranking a candidate batch against a
  * query is pure CPU work, so keeping it off the main thread guarantees the
  * search box, results list and player stay responsive while scores compute.

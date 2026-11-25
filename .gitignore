@@ -7,3 +7,4 @@ first_release/
 caddy.exe
 .opencode
 tmp/
+src-tauri/

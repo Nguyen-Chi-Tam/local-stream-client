@@ -5,15 +5,18 @@ import {
   pickTitle,
   pickThumbnailUrl,
 } from '../functions/mediaUtils.js';
+import { isTauriRuntime, proxyServerUrl } from '../functions/desktopBridge.js';
+import { showToast } from '../functions/queueService.js';
 
-const isElectron = typeof navigator !== 'undefined' && /electron/i.test(navigator.userAgent);
+const isElectron = (typeof navigator !== 'undefined' && /electron/i.test(navigator.userAgent))
+  || (typeof window !== 'undefined' && Boolean(window.__TAURI_INTERNALS__));
 
 function pickPhotoSourceUrl(serverUrl, item) {
   const id = getItemId(item);
   const base = (serverUrl || '').replace(/\/$/, '');
 
   if (base && id != null) {
-    return base + '/media/image/' + encodeURIComponent(id);
+    return proxyServerUrl(base + '/media/image/' + encodeURIComponent(id));
   }
 
   const directRaw =
@@ -31,16 +34,16 @@ function pickPhotoSourceUrl(serverUrl, item) {
   if (!text) return '';
 
   if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(text)) {
-    return text;
+    return proxyServerUrl(text);
   }
 
   if (!base) return text;
 
   if (text.startsWith('/')) {
-    return base + text;
+    return proxyServerUrl(base + text);
   }
 
-  return base + '/' + text;
+  return proxyServerUrl(base + '/' + text);
 }
 
 function buildPhotoFilename(item, fallbackUrl) {
@@ -48,7 +51,9 @@ function buildPhotoFilename(item, fallbackUrl) {
   const safeTitle = title.replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_').replace(/\s+/g, ' ').trim();
 
   try {
-    const path = new URL(String(fallbackUrl || ''), window.location.href).pathname || '';
+    const parsed = new URL(String(fallbackUrl || ''), window.location.href);
+    const targetParam = parsed.searchParams.get('url');
+    const path = targetParam ? new URL(targetParam).pathname : (parsed.pathname || '');
     const extMatch = path.match(/\.[a-zA-Z0-9]{2,6}$/);
     const ext = extMatch ? extMatch[0].toLowerCase() : '.jpg';
     return (safeTitle || 'photo') + ext;
@@ -261,6 +266,7 @@ export default function PhotoViewPage({
     if (!currentItem || !currentPhotoUrl) return;
 
     const filename = buildPhotoFilename(currentItem, currentPhotoUrl);
+    const inTauri = isTauriRuntime();
 
     try {
       const response = await fetch(currentPhotoUrl, { mode: 'cors' });
@@ -274,8 +280,24 @@ export default function PhotoViewPage({
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      window.URL.revokeObjectURL(blobUrl);
+      setTimeout(() => window.URL.revokeObjectURL(blobUrl), 1500);
+
+      if (inTauri) {
+        showToast({
+          action: 'download',
+          item: currentItem,
+          message: 'Downloaded photo',
+        });
+      }
     } catch {
+      if (inTauri) {
+        showToast({
+          action: 'remove',
+          item: currentItem,
+          message: 'Failed to download photo',
+        });
+        return;
+      }
       const link = document.createElement('a');
       link.href = currentPhotoUrl;
       link.download = filename;
@@ -290,6 +312,7 @@ export default function PhotoViewPage({
   function handleCopyCurrentPhoto() {
     if (!currentItem || !currentPhotoUrl) return;
 
+    const inTauri = isTauriRuntime();
     const blobPromise = fetch(currentPhotoUrl, { mode: 'cors' })
       .then((res) => {
         if (!res.ok) throw new Error('Fetch failed');
@@ -326,13 +349,35 @@ export default function PhotoViewPage({
           'image/png': blobPromise
         })
       ]).then(() => {
-        setShowCopiedToast(true);
-        setTimeout(() => setShowCopiedToast(false), 2000);
+        if (inTauri) {
+          showToast({
+            action: 'copy',
+            item: currentItem,
+            message: 'Copied to clipboard',
+          });
+        } else {
+          setShowCopiedToast(true);
+          setTimeout(() => setShowCopiedToast(false), 2000);
+        }
       }).catch(err => {
         console.error('Clipboard write failed asynchronously:', err);
+        if (inTauri) {
+          showToast({
+            action: 'remove',
+            item: currentItem,
+            message: 'Failed to copy photo',
+          });
+        }
       });
     } catch (err) {
       console.error('Failed to initiate clipboard write:', err);
+      if (inTauri) {
+        showToast({
+          action: 'remove',
+          item: currentItem,
+          message: 'Failed to copy photo',
+        });
+      }
     }
   }
 

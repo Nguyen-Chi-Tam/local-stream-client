@@ -350,7 +350,8 @@ function tryUnlockScreenOrientation() {
   }
 }
 
-const isElectron = typeof navigator !== 'undefined' && /electron/i.test(navigator.userAgent);
+const isElectron = (typeof navigator !== 'undefined' && /electron/i.test(navigator.userAgent))
+  || (typeof window !== 'undefined' && Boolean(window.__TAURI_INTERNALS__));
 
 export default function VideoPage({
   serverUrl,

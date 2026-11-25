@@ -81,7 +81,18 @@ You can control music playback using the following keyboard shortcuts:
 - Modern browsers block secure (HTTPS) websites from directly talking to insecure (HTTP) servers on private networks.
 - Because LocalStream servers currently run over plain HTTP on LAN addresses (for example `http://192.168.x.x:8080`), the hosted client may not work reliably on all devices unless extra networking steps (like local hosting or a reverse‑proxy / tunnel) are used.
 
-- Access http://lsclient.qzz.io (HTTP, not HTTPS) to make it work, or use the provided Electron app
+- Access http://lsclient.qzz.io (HTTP, not HTTPS) to make it work, or use the Tauri Windows app.
 
 ## Windows App release
-To avoid browser mixed-content limitations and get a smoother local-network experience, this project is also available as a Windows app built with Electron. Download the official release from this GitHub repository.
+To avoid browser mixed-content and CORS limitations, the Windows app uses Tauri v2.
+The Rust sidecar proxy listens on `127.0.0.1:18765` and forwards LocalStream
+media/API requests, including byte ranges used by audio and video playback.
+
+```bash
+npm install
+npm run tauri:dev
+# or create an NSIS installer:
+npm run tauri:build
+```
+
+The browser build remains available with `npm run build:web`.

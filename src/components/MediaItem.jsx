@@ -19,7 +19,67 @@ import {
   pickSourceUrl,
   getDefaultArtForType,
 } from '../functions/mediaUtils.js';
-import { useQueue, getQueue } from '../functions/queueService.js';
+import { useQueue, getQueue, showToast } from '../functions/queueService.js';
+import { isTauriRuntime } from '../functions/desktopBridge.js';
+
+const MIME_EXT_MAP = {
+  'audio/mpeg': 'mp3',
+  'audio/mp3': 'mp3',
+  'audio/mp4': 'm4a',
+  'audio/x-m4a': 'm4a',
+  'audio/m4a': 'm4a',
+  'audio/aac': 'aac',
+  'audio/flac': 'flac',
+  'audio/x-flac': 'flac',
+  'audio/wav': 'wav',
+  'audio/x-wav': 'wav',
+  'audio/ogg': 'ogg',
+  'audio/opus': 'opus',
+  'audio/webm': 'webm',
+  'audio/x-ms-wma': 'wma',
+  'video/mp4': 'mp4',
+  'video/webm': 'webm',
+  'video/x-matroska': 'mkv',
+};
+
+function extractItemExtension(item, contentType = '') {
+  const candidates = [
+    item?.fileName,
+    item?.filename,
+    item?.name,
+    item?.path,
+    item?.filePath,
+    item?.filepath,
+    item?.fullPath,
+    item?.location,
+  ];
+  for (const raw of candidates) {
+    if (!raw) continue;
+    const base = String(raw).split(/[\\/]/).pop() || '';
+    const match = base.match(/\.([a-zA-Z0-9]{2,5})$/);
+    if (match) return match[1].toLowerCase();
+  }
+  const mime = String(contentType || item?.mimeType || item?.mime || item?.contentType || '')
+    .split(';')[0]
+    .trim()
+    .toLowerCase();
+  if (MIME_EXT_MAP[mime]) return MIME_EXT_MAP[mime];
+  return '';
+}
+
+function buildMediaDownloadFilename(item, contentType = '', isVideo = false) {
+  const rawTitle = (pickTitle(item) || 'media').trim();
+  const safeTitle = rawTitle
+    .replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_')
+    .replace(/\s+/g, ' ')
+    .replace(/[. ]+$/, '')
+    .trim() || 'media';
+  const ext = extractItemExtension(item, contentType) || (isVideo ? 'mp4' : 'mp3');
+  if (safeTitle.toLowerCase().endsWith(`.${ext}`)) {
+    return safeTitle;
+  }
+  return `${safeTitle}.${ext}`;
+}
 
 function LazyImage({ src, alt, className, onError }) {
   const [isVisible, setIsVisible] = useState(false);
@@ -117,22 +177,61 @@ const MediaItem = React.memo(({
     }
   };
 
-  const handleDownload = (e) => {
+  const handleDownload = async (e) => {
     e.stopPropagation();
     if (!sourceUrl || typeof window === 'undefined') return;
 
-    const title = pickTitle(item) || 'media';
-    const ext = item?.path?.split('.').pop() || item?.fileName?.split('.').pop() || item?.filename?.split('.').pop() || '';
-    const filename = ext && !title.toLowerCase().endsWith(`.${ext.toLowerCase()}`) ? `${title}.${ext}` : title;
+    const inTauri = isTauriRuntime();
 
-    const a = document.createElement('a');
-    a.href = sourceUrl;
-    a.download = filename;
-    a.target = '_blank';
-    a.rel = 'noopener noreferrer';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    try {
+      const response = await fetch(sourceUrl, { mode: 'cors' });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+      const contentType = response.headers.get('content-type') || '';
+      const filename = buildMediaDownloadFilename(item, contentType, isVideoItem);
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => window.URL.revokeObjectURL(blobUrl), 3000);
+
+      if (inTauri) {
+        showToast({
+          action: 'download',
+          item,
+          message: 'Downloaded audio',
+        });
+      }
+    } catch {
+      const filename = buildMediaDownloadFilename(item, '', isVideoItem);
+      if (inTauri) {
+        showToast({
+          action: 'remove',
+          item,
+          message: 'Failed to download audio',
+        });
+        return;
+      }
+      const isProxyUrl = sourceUrl.startsWith('/__media');
+      const fallbackHref = isProxyUrl
+        ? `${sourceUrl}&download=${encodeURIComponent(filename)}`
+        : sourceUrl;
+      const a = document.createElement('a');
+      a.href = fallbackHref;
+      a.download = filename;
+      if (!isProxyUrl) {
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+      }
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
   };
 
   const handleAddToStart = (e) => {

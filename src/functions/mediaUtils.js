@@ -1,5 +1,6 @@
 import defaultArt from '../assets/default-art.png';
 import { publicAssetUrl } from './publicAsset.js';
+import { proxyServerUrl } from './desktopBridge.js';
 
 export const defaultVideoArt = publicAssetUrl('default-video-art.png');
 
@@ -14,7 +15,7 @@ export function pickPhotoSourceUrl(serverUrl, item) {
 
   // Image playback should use the canonical stream endpoint.
   if (base && id != null) {
-    return base + '/media/image/' + encodeURIComponent(id);
+    return proxyServerUrl(base + '/media/image/' + encodeURIComponent(id));
   }
 
   const directRaw =
@@ -32,16 +33,16 @@ export function pickPhotoSourceUrl(serverUrl, item) {
   if (!text) return '';
 
   if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(text)) {
-    return text;
+    return proxyServerUrl(text);
   }
 
   if (!base) return text;
 
   if (text.startsWith('/')) {
-    return base + text;
+    return proxyServerUrl(base + text);
   }
 
-  return base + '/' + text;
+  return proxyServerUrl(base + '/' + text);
 }
 // Returns a folder name for grouping, similar to MediaPage
 export function pickFolderName(item) {
@@ -465,17 +466,17 @@ export function pickRelativeOrAbsoluteUrl(serverUrl, raw) {
   if (!text) return '';
 
   if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(text)) {
-    return text;
+    return proxyServerUrl(text);
   }
 
   const base = (serverUrl || '').replace(/\/$/, '');
   if (!base) return text;
 
   if (text.startsWith('/')) {
-    return base + text;
+    return proxyServerUrl(base + text);
   }
 
-  return base + '/' + text;
+  return proxyServerUrl(base + '/' + text);
 }
 
 export function pickThumbnailUrl(serverUrl, item, mediaTypeHint) {
@@ -524,7 +525,7 @@ export function pickThumbnailUrl(serverUrl, item, mediaTypeHint) {
   if (type === 'IMAGE') mediaTypePath = 'image';
   else if (type === 'AUDIO') mediaTypePath = 'audio';
 
-  return base + '/thumbnail/' + mediaTypePath + '/' + encodeURIComponent(id);
+  return proxyServerUrl(base + '/thumbnail/' + mediaTypePath + '/' + encodeURIComponent(id));
 }
 
 export function pickSourceUrl(serverUrl, item) {
@@ -537,7 +538,7 @@ export function pickSourceUrl(serverUrl, item) {
   else if (type === 'AUDIO') mediaTypePath = 'audio';
 
   if (base && id != null) {
-    return base + '/media/' + mediaTypePath + '/' + encodeURIComponent(id);
+    return proxyServerUrl(base + '/media/' + mediaTypePath + '/' + encodeURIComponent(id));
   }
 
   const directRaw =
@@ -557,7 +558,7 @@ export function pickSourceUrl(serverUrl, item) {
   if (id == null) return '';
   if (!base) return '';
 
-  return base + '/media/' + mediaTypePath + '/' + encodeURIComponent(id);
+  return proxyServerUrl(base + '/media/' + mediaTypePath + '/' + encodeURIComponent(id));
 }
 
 export function filterItems(items, query) {

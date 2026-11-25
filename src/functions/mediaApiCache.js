@@ -1,4 +1,5 @@
 import { clearQueue } from './queueService.js';
+import { proxyServerUrl } from './desktopBridge.js';
 
 const CACHE_TTL_MS = 2 * 60 * 1000;
 
@@ -23,7 +24,7 @@ export function clearMediaCache(serverUrl) {
   }
 
   // Clear cache for a specific server URL
-  const endpoint = getMediaEndpoint(serverUrl);
+  const endpoint = proxyServerUrl(getMediaEndpoint(serverUrl));
   if (endpoint) {
     mediaCache.delete(endpoint);
   }
@@ -31,7 +32,7 @@ export function clearMediaCache(serverUrl) {
 
 export function getCachedMediaItems(serverUrl, options = {}) {
   const { staleOk = false } = options;
-  const endpoint = getMediaEndpoint(serverUrl);
+  const endpoint = proxyServerUrl(getMediaEndpoint(serverUrl));
   if (!endpoint) return null;
 
   const now = Date.now();
@@ -51,7 +52,7 @@ export function getCachedMediaItems(serverUrl, options = {}) {
 
 export async function fetchMediaItemsCached(serverUrl, options = {}) {
   const { force = false } = options;
-  const endpoint = getMediaEndpoint(serverUrl);
+  const endpoint = proxyServerUrl(getMediaEndpoint(serverUrl));
   if (!endpoint) return [];
 
   const now = Date.now();

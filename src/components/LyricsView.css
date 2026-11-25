@@ -591,6 +591,12 @@
     border-color: rgba(255, 255, 255, 0.7) !important;
   }
 
+  @media (pointer: coarse) {
+    .lyrics-landscape-art-frame .player-art-zoom-button {
+      display: none !important;
+    }
+  }
+
   /* Info row: Title/Artist underneath album art */
   .lyrics-landscape-meta-row {
     display: flex !important;

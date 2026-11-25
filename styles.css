@@ -3876,7 +3876,8 @@ input[type='search']::-ms-reveal {
   transform: scale(0.94);
 }
 
-.music-player-active #player .player-art-zoom-button {
+.music-player-active #player .player-art-zoom-button,
+#player.column-player .player-art-zoom-button {
   right: clamp(0.65rem, 1.2vw, 1rem);
   bottom: clamp(0.65rem, 1.2vw, 1rem);
 }
@@ -3951,12 +3952,18 @@ input[type='search']::-ms-reveal {
   transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.music-player-active #player .player-art img.player-art-foreground.is-art-zoomed {
+.music-player-active #player .player-art img.player-art-foreground.is-art-zoomed,
+.music-page.has-playing:not(.music-player-active) #player.column-player .player-art img.player-art-foreground.is-art-zoomed {
   object-fit: contain !important;
 }
 
-.music-page.has-playing:not(.music-player-active) #player .player-art img.player-art-foreground.is-art-zoomed  {
+.music-page:not(.music-player-active) #player:not(.column-player) .player-art img.player-art-foreground {
   object-fit: cover !important;
+  transform: none !important;
+}
+
+.music-page:not(.music-player-active) #player:not(.column-player) .player-art-zoom-button {
+  display: none !important;
 }
 
 @media (pointer: coarse) {

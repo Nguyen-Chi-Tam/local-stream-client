@@ -65,7 +65,8 @@ const logoImg = publicAssetUrl('localstream.png');
 const STORAGE_KEY = 'localstream_server_url';
 const RECENT_SERVERS_KEY = 'localstream_recent_servers';
 
-const isElectron = typeof navigator !== 'undefined' && /electron/i.test(navigator.userAgent);
+const isElectron = (typeof navigator !== 'undefined' && /electron/i.test(navigator.userAgent))
+  || (typeof window !== 'undefined' && Boolean(window.__TAURI_INTERNALS__));
 
 
 function normalizeUrl(raw) {

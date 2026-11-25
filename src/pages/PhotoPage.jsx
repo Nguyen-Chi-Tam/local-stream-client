@@ -3,6 +3,7 @@ import { Folder, ChevronUp, ChevronDown, ChevronLeft, Delete, X, ArrowUp, ArrowD
 import JSZip from 'jszip';
 
 import { clearMediaCache, fetchMediaItemsCached, getMediaEndpoint } from '../functions/mediaApiCache.js';
+import { proxyServerUrl } from '../functions/desktopBridge.js';
 import Header from '../components/Header.jsx';
 import PhotoViewPage from './PhotoViewPage.jsx';
 import { SkeletonPhotoCard } from '../components/Skeleton.jsx';
@@ -24,7 +25,8 @@ import {
 const STORAGE_KEY = 'localstream_server_url';
 const SETTINGS_KEY = 'localstream_photo_settings';
 
-const isElectron = typeof navigator !== 'undefined' && /electron/i.test(navigator.userAgent);
+const isElectron = (typeof navigator !== 'undefined' && /electron/i.test(navigator.userAgent))
+  || (typeof window !== 'undefined' && Boolean(window.__TAURI_INTERNALS__));
 
 function loadSettings() {
   try {
@@ -52,7 +54,7 @@ function pickPhotoSourceUrl(serverUrl, item) {
 
   // Image playback should use the canonical stream endpoint.
   if (base && id != null) {
-    return base + '/media/image/' + encodeURIComponent(id);
+    return proxyServerUrl(base + '/media/image/' + encodeURIComponent(id));
   }
 
   const directRaw =
@@ -70,16 +72,16 @@ function pickPhotoSourceUrl(serverUrl, item) {
   if (!text) return '';
 
   if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(text)) {
-    return text;
+    return proxyServerUrl(text);
   }
 
   if (!base) return text;
 
   if (text.startsWith('/')) {
-    return base + text;
+    return proxyServerUrl(base + text);
   }
 
-  return base + '/' + text;
+  return proxyServerUrl(base + '/' + text);
 }
 
 function buildPhotoFilename(item, fallbackUrl) {
@@ -87,7 +89,9 @@ function buildPhotoFilename(item, fallbackUrl) {
   const safeTitle = title.replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_').replace(/\s+/g, ' ').trim();
 
   try {
-    const path = new URL(String(fallbackUrl || ''), window.location.href).pathname || '';
+    const parsed = new URL(String(fallbackUrl || ''), window.location.href);
+    const targetParam = parsed.searchParams.get('url');
+    const path = targetParam ? new URL(targetParam).pathname : (parsed.pathname || '');
     const extMatch = path.match(/\.[a-zA-Z0-9]{2,6}$/);
     const ext = extMatch ? extMatch[0].toLowerCase() : '.jpg';
     return (safeTitle || 'photo') + ext;

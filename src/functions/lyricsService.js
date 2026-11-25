@@ -686,7 +686,7 @@ const YTM_REQUEST_TIMEOUT_MS = 12000;
 const YTM_CACHE_TTL_MS = 10 * 60 * 1000;
 const YTM_CACHE_MAX_ENTRIES = 40;
 // Optional CORS relay whose base maps to https://music.youtube.com/youtubei/v1.
-// The desktop build uses Electron IPC instead, and `npm run dev` uses the Vite
+// The desktop build uses the Tauri bridge instead, and `npm run dev` uses the Vite
 // proxy configured in vite.config.mjs.
 const YTM_PROXY_BASE = String(import.meta.env.VITE_YTM_PROXY || '').replace(/\/+$/, '');
 const YTM_USE_DEV_PROXY = Boolean(import.meta.env.DEV);
@@ -760,9 +760,12 @@ async function ytmRequest(path, body, signal) {
   }
 
   // Innertube rejects browser requests carrying a foreign Origin header, so a
-  // hosted web build cannot read these responses directly. Bail out quietly
-  // once that has been established instead of retrying every lookup.
-  if (!YTM_PROXY_BASE && !YTM_USE_DEV_PROXY && ytmDirectFetchBlocked) return null;
+  // hosted web build cannot read these responses directly. Do not make the
+  // request at all unless a desktop bridge or proxy is available.
+  if (!YTM_PROXY_BASE && !YTM_USE_DEV_PROXY) {
+    ytmDirectFetchBlocked = true;
+    return null;
+  }
 
   const controller = new AbortController();
   const abortFromCaller = () => controller.abort();

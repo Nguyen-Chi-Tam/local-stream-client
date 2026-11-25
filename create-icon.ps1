@@ -1,0 +1,10 @@
+Add-Type -AssemblyName System.Drawing
+$img = [System.Drawing.Image]::FromFile('public/lsclient.png')
+$thumb = $img.GetThumbnailImage(256, 256, $null, [IntPtr]::Zero)
+$icon = [System.Drawing.Icon]::FromHandle($thumb.GetHicon())
+$fs = [System.IO.File]::Create('src-tauri/icons/icon.ico')
+$icon.Save($fs)
+$fs.Close()
+$img.Dispose()
+$thumb.Dispose()
+$icon.Dispose()

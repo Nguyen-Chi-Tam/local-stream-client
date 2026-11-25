@@ -69,25 +69,40 @@ export default function App() {
     return stripBasePath(window.location.pathname);
   });
 
-  // Keyboard zoom shortcut handling for Electron
+  // Keyboard & Ctrl+Wheel zoom shortcut handling for the desktop shell.
   useEffect(() => {
     function handleZoomKeys(e) {
       if (!window.electronZoom) return;
-      if (e.ctrlKey && !e.shiftKey && !e.altKey) {
-        if (e.key === '+' || e.key === '=') {
+      if ((e.ctrlKey || e.metaKey) && !e.altKey) {
+        if (e.key === '+' || e.key === '=' || e.code === 'Equal' || e.code === 'NumpadAdd') {
           window.electronZoom.zoomIn();
           e.preventDefault();
-        } else if (e.key === '-') {
+        } else if ((e.key === '-' || e.key === '_' || e.code === 'Minus' || e.code === 'NumpadSubtract') && !e.shiftKey) {
           window.electronZoom.zoomOut();
           e.preventDefault();
-        } else if (e.key === '0') {
+        } else if ((e.key === '0' || e.code === 'Digit0' || e.code === 'Numpad0') && !e.shiftKey) {
           window.electronZoom.zoomReset();
           e.preventDefault();
         }
       }
     }
+    function handleZoomWheel(e) {
+      if (!window.electronZoom) return;
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && e.deltaY !== 0) {
+        e.preventDefault();
+        if (e.deltaY < 0) {
+          window.electronZoom.zoomIn();
+        } else {
+          window.electronZoom.zoomOut();
+        }
+      }
+    }
     window.addEventListener('keydown', handleZoomKeys);
-    return () => window.removeEventListener('keydown', handleZoomKeys);
+    window.addEventListener('wheel', handleZoomWheel, { passive: false });
+    return () => {
+      window.removeEventListener('keydown', handleZoomKeys);
+      window.removeEventListener('wheel', handleZoomWheel);
+    };
   }, []);
 
   function getSectionFromPath(rawPath) {

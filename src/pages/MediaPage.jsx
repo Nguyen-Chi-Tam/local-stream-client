@@ -151,7 +151,8 @@ function reorderByFolder(items, sortKey, isSortReversed) {
   return ordered;
 }
 
-const isElectron = typeof navigator !== 'undefined' && /electron/i.test(navigator.userAgent);
+const isElectron = (typeof navigator !== 'undefined' && /electron/i.test(navigator.userAgent))
+  || (typeof window !== 'undefined' && Boolean(window.__TAURI_INTERNALS__));
 
 export default function MediaPage({
   serverUrl,
@@ -220,14 +221,23 @@ export default function MediaPage({
   const [isLargeLayout, setIsLargeLayout] = useState(false);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mq = typeof window.matchMedia === 'function'
+      ? window.matchMedia('(min-width: 701px) and (min-aspect-ratio: 1.2)')
+      : null;
     const checkLayout = () => {
-      const isMiniPhone = typeof window !== 'undefined' && (window.innerWidth <= 380 || window.innerHeight < 700);
-      const isLarge = typeof window !== 'undefined' && !isMiniPhone && window.innerWidth > 700 && (window.innerWidth / window.innerHeight) >= 1.2;
+      const isLarge = mq
+        ? mq.matches
+        : (window.innerWidth > 700 && (window.innerWidth / window.innerHeight) >= 1.2);
       setIsLargeLayout(isLarge);
     };
     checkLayout();
     window.addEventListener('resize', checkLayout);
-    return () => window.removeEventListener('resize', checkLayout);
+    mq?.addEventListener?.('change', checkLayout);
+    return () => {
+      window.removeEventListener('resize', checkLayout);
+      mq?.removeEventListener?.('change', checkLayout);
+    };
   }, []);
 
   const setPlayerFullscreen = useCallback((nextValue) => {
@@ -292,8 +302,15 @@ export default function MediaPage({
   }, []);
 
   // Track the visual viewport height so the layout adjusts when the
-  // on-screen keyboard opens or closes on mobile devices.
+  // on-screen keyboard opens or closes on mobile devices. Skip on desktop/Tauri
+  // shells where native 100dvh tracks window resizing & WebView zoom without lag.
   useEffect(() => {
+    if (isElectron) return;
+    const isMobileTouch = typeof navigator !== 'undefined'
+      && (/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '')
+        || Number(navigator.maxTouchPoints || 0) > 0);
+    if (!isMobileTouch) return;
+
     const vv = window.visualViewport;
     if (!vv) return;
 
@@ -314,8 +331,10 @@ export default function MediaPage({
     update();
 
     vv.addEventListener('resize', onResize);
+    window.addEventListener('resize', onResize);
     return () => {
       vv.removeEventListener('resize', onResize);
+      window.removeEventListener('resize', onResize);
       if (rafId) cancelAnimationFrame(rafId);
       const el = containerRef.current;
       if (el) el.style.removeProperty('--app-height');

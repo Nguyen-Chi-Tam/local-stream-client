@@ -207,7 +207,13 @@ export default function LyricsView({
 
   const artFrameRef = useRef(null);
   const artImgRef = useRef(null);
+  const artPinchRef = useRef(null);
+  const ignoreArtClickRef = useRef(false);
   const [fillScale, setFillScale] = useState(1);
+  const [isUltraLayout, setIsUltraLayout] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth > window.innerHeight;
+  });
 
   function computeLyricsArtFillScale() {
     const frame = artFrameRef.current;
@@ -222,9 +228,30 @@ export default function LyricsView({
     return Math.max((cover / contain) * 1.002, 1);
   }
 
+  // Track Ultra (landscape) vs Pro Max (portrait/square) so album art zooming
+  // is strictly enabled in Ultra and completely disabled in Pro Max.
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const mq = typeof window.matchMedia === 'function'
+      ? window.matchMedia('(orientation: landscape) and (min-aspect-ratio: 1/1)')
+      : null;
+    const updateLayout = () => {
+      const ultra = mq ? (mq.matches && window.innerWidth > window.innerHeight) : (window.innerWidth > window.innerHeight);
+      setIsUltraLayout(ultra);
+    };
+    updateLayout();
+    window.addEventListener('resize', updateLayout);
+    mq?.addEventListener?.('change', updateLayout);
+    return () => {
+      window.removeEventListener('resize', updateLayout);
+      mq?.removeEventListener?.('change', updateLayout);
+    };
+  }, []);
+
   // Recompute the fill scale whenever the image loads or the frame resizes so
   // "fill" always covers the entire frame exactly (cover-equivalent).
   useEffect(() => {
+    if (!isUltraLayout) return undefined;
     const frame = artFrameRef.current;
     const refresh = () => setFillScale(computeLyricsArtFillScale());
     refresh();
@@ -235,7 +262,7 @@ export default function LyricsView({
       ro.disconnect();
       window.removeEventListener('resize', refresh);
     };
-  }, []);
+  }, [isUltraLayout, displayArtUrl, currentArtUrl]);
 
   const effectiveDur = currentDuration || (currentlyPlaying && pickDurationSeconds ? pickDurationSeconds(currentlyPlaying) : 0) || 0;
   const effectiveTime = audioRef?.current && Number.isFinite(audioRef.current.currentTime) ? audioRef.current.currentTime : currentTime;
@@ -1294,15 +1321,55 @@ export default function LyricsView({
     </div>
   );
 
-  // Mouse wheel over the album art mirrors the corner zoom button: scrolling
-  // up fills the frame, scrolling down fits it again. Direction-based rather
-  // than a toggle, so trackpad inertia or a fast spin settles on a stable
-  // state instead of flickering between the two.
+  // Mouse wheel over the album art mirrors the corner zoom button in Ultra:
+  // scrolling up fills the frame, scrolling down fits it again. Strictly
+  // disabled in Pro Max (portrait/square).
   const handleArtWheel = (e) => {
-    if (!e.deltaY) return;
+    if (!isUltraLayout || !e.deltaY) return;
+    e.stopPropagation();
     const next = e.deltaY < 0;
     setFillScale(computeLyricsArtFillScale());
     setIsArtZoomed((prev) => (prev === next ? prev : next));
+  };
+
+  const handleArtTouchStart = (e) => {
+    if (!isUltraLayout || e.touches.length !== 2) return;
+    const firstTouch = e.touches[0];
+    const secondTouch = e.touches[1];
+    const distance = Math.hypot(
+      secondTouch.clientX - firstTouch.clientX,
+      secondTouch.clientY - firstTouch.clientY,
+    );
+    if (distance <= 0) return;
+    artPinchRef.current = {
+      distance,
+      initialZoomed: isArtZoomed,
+    };
+  };
+
+  const handleArtTouchMove = (e) => {
+    if (!isUltraLayout || e.touches.length !== 2 || !artPinchRef.current) return;
+    const firstTouch = e.touches[0];
+    const secondTouch = e.touches[1];
+    const distanceRatio = Math.hypot(
+      secondTouch.clientX - firstTouch.clientX,
+      secondTouch.clientY - firstTouch.clientY,
+    ) / artPinchRef.current.distance;
+
+    if (e.cancelable) e.preventDefault();
+    ignoreArtClickRef.current = true;
+    if (distanceRatio >= 1.08) {
+      setFillScale(computeLyricsArtFillScale());
+      setIsArtZoomed(true);
+    } else if (distanceRatio <= 0.92) {
+      setIsArtZoomed(false);
+    } else {
+      setIsArtZoomed(artPinchRef.current.initialZoomed);
+    }
+  };
+
+  const handleArtTouchEnd = () => {
+    artPinchRef.current = null;
   };
 
   return (
@@ -1395,8 +1462,18 @@ export default function LyricsView({
                 tabIndex={0}
                 aria-label="Show music list (F)"
                 title="Show music list (F)"
-                onWheel={handleArtWheel}
-                onClick={() => {
+                style={{ touchAction: isUltraLayout ? 'none' : 'manipulation' }}
+                onWheel={isUltraLayout ? handleArtWheel : undefined}
+                onTouchStart={isUltraLayout ? handleArtTouchStart : undefined}
+                onTouchMove={isUltraLayout ? handleArtTouchMove : undefined}
+                onTouchEnd={isUltraLayout ? handleArtTouchEnd : undefined}
+                onTouchCancel={isUltraLayout ? handleArtTouchEnd : undefined}
+                onClick={(e) => {
+                  if (ignoreArtClickRef.current) {
+                    e.preventDefault();
+                    ignoreArtClickRef.current = false;
+                    return;
+                  }
                   if (onExitToSmallPlayer) {
                     onExitToSmallPlayer();
                   } else if (onCloseLyrics) {
@@ -1420,7 +1497,7 @@ export default function LyricsView({
                 />
                 <img
                   ref={artImgRef}
-                  className={`lyrics-landscape-art-img player-art-foreground select-none${isArtZoomed ? ' is-art-zoomed' : ''}`}
+                  className={`lyrics-landscape-art-img player-art-foreground select-none${isUltraLayout && isArtZoomed ? ' is-art-zoomed' : ''}`}
                   src={artSrc}
                   alt={displayTitle}
                   draggable={false}
@@ -1432,9 +1509,9 @@ export default function LyricsView({
                     width: '100%',
                     height: '100%',
                     transformOrigin: 'center',
-                    willChange: 'transform',
-                    transition: 'transform 0.5s cubic-bezier(0.22, 1, 0.36, 1) !important',
-                    transform: `scale(${isArtZoomed ? fillScale : 1})`,
+                    willChange: isUltraLayout ? 'transform' : 'auto',
+                    transition: 'transform 0.5s cubic-bezier(0.22, 1, 0.36, 1)',
+                    transform: `scale(${isUltraLayout && isArtZoomed ? fillScale : 1})`,
                   }}
                   onError={(e) => {
                     if (defaultArt && e.currentTarget.src !== defaultArt) {
@@ -1442,23 +1519,28 @@ export default function LyricsView({
                     }
                   }}
                 />
-                <button
-                  type="button"
-                  className="player-art-zoom-button select-none"
-                  aria-label={isArtZoomed ? 'Show full album art' : 'Fill album art frame'}
-                  title={isArtZoomed ? 'Show full album art — scroll to zoom' : 'Fill album art frame — scroll to zoom'}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setFillScale(computeLyricsArtFillScale());
-                    setIsArtZoomed((prev) => !prev);
-                  }}
-                >
-                  <MorphIcon
-                    size={16}
-                    spring="snappy"
-                    icon={isArtZoomed ? MorphMinimize2 : MorphMaximize2}
-                  />
-                </button>
+                {isUltraLayout && (
+                  <button
+                    type="button"
+                    className="player-art-zoom-button select-none"
+                    aria-label={isArtZoomed ? 'Show full album art' : 'Fill album art frame'}
+                    title={isArtZoomed ? 'Show full album art — scroll to zoom' : 'Fill album art frame — scroll to zoom'}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onTouchStart={(e) => e.stopPropagation()}
+                    onTouchEnd={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setFillScale(computeLyricsArtFillScale());
+                      setIsArtZoomed((prev) => !prev);
+                    }}
+                  >
+                    <MorphIcon
+                      size={16}
+                      spring="snappy"
+                      icon={isArtZoomed ? MorphMinimize2 : MorphMaximize2}
+                    />
+                  </button>
+                )}
               </div>
 
               {/* Title & Artist group underneath album art */}

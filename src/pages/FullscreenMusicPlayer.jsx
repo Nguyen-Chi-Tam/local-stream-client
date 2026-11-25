@@ -21,6 +21,7 @@ function isElectronRuntime() {
     Boolean(window.electronZoom) ||
     Boolean(window.electron) ||
     Boolean(window.process?.versions?.electron) ||
+    Boolean(window.__TAURI_INTERNALS__) ||
     /electron/i.test(window.navigator?.userAgent || '')
   );
 }
@@ -163,23 +164,6 @@ export default function FullscreenMusicPlayer({
     }
   }, [currentTime, currentDuration, currentlyPlaying, formatTime, pickDurationSeconds, audioRef]);
 
-  // Recompute the fill scale whenever the image loads or the frame resizes so
-  // "fill" always covers the entire frame exactly (cover-equivalent).
-  useEffect(() => {
-    const frame = artFrameRef.current;
-    const refresh = () => {
-      setFillScale(computeArtFillScale());
-    };
-    refresh();
-    const ro = new ResizeObserver(refresh);
-    if (frame) ro.observe(frame);
-    window.addEventListener('resize', refresh);
-    return () => {
-      ro.disconnect();
-      window.removeEventListener('resize', refresh);
-    };
-  }, []);
-
   function handleSeekInstant(e) {
     const val = typeof e === 'number' ? e : (Number(e?.target?.value) || 0);
     const dur = currentDuration || (currentlyPlaying ? pickDurationSeconds(currentlyPlaying) : 0) || 0;
@@ -225,6 +209,32 @@ export default function FullscreenMusicPlayer({
   const [showLyrics, setShowLyrics] = useState(false);
   const [isClosingLyrics, setIsClosingLyrics] = useState(false);
   const closeLyricsTimerRef = useRef(null);
+
+  // Album art zooming is strictly reserved for:
+  // - Pro (Column Player: isColumnPlayer, and Fullscreen Portrait: isPlayerFullscreen && !showLyrics)
+  // - Pro XL (Fullscreen Landscape: isPlayerFullscreen && !showLyrics)
+  // - Ultra (handled inside LyricsView in landscape)
+  // Mini, Base, Plus (!isColumnPlayer && !isPlayerFullscreen) and Pro Max must never zoom.
+  const isColumnPlayer = Boolean(isLargeLayout && !isPlayerFullscreen);
+  const canZoomArt = Boolean((isPlayerFullscreen && !showLyrics) || isColumnPlayer);
+
+  // Recompute the fill scale whenever the artwork mounts, loads, switches layout,
+  // or resizes so "fill" always covers the active frame (Column Pro, Fullscreen Pro, Pro XL).
+  useEffect(() => {
+    if (!currentlyPlaying || !canZoomArt) return undefined;
+    const frame = artFrameRef.current;
+    const refresh = () => {
+      setFillScale(computeArtFillScale());
+    };
+    refresh();
+    const ro = new ResizeObserver(refresh);
+    if (frame) ro.observe(frame);
+    window.addEventListener('resize', refresh);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', refresh);
+    };
+  }, [currentlyPlaying, canZoomArt, isPlayerFullscreen, isColumnPlayer, displayArtUrl]);
 
   const openLyricsSmoothly = useCallback(() => {
     if (closeLyricsTimerRef.current) {
@@ -343,13 +353,16 @@ export default function FullscreenMusicPlayer({
 
   function handleArtTouchStart(event) {
     if (event.touches.length === 2) {
+      if (!canZoomArt) return;
       const firstTouch = event.touches[0];
       const secondTouch = event.touches[1];
       const deltaX = secondTouch.clientX - firstTouch.clientX;
       const deltaY = secondTouch.clientY - firstTouch.clientY;
+      const distance = Math.hypot(deltaX, deltaY);
+      if (distance <= 0) return;
       artTouchStartRef.current = null;
       artPinchRef.current = {
-        distance: Math.hypot(deltaX, deltaY),
+        distance,
         initialZoomed: isArtZoomed,
       };
       return;
@@ -365,7 +378,7 @@ export default function FullscreenMusicPlayer({
   }
 
   function handleArtTouchMove(event) {
-    if (event.touches.length !== 2 || !artPinchRef.current) return;
+    if (!canZoomArt || event.touches.length !== 2 || !artPinchRef.current) return;
 
     const firstTouch = event.touches[0];
     const secondTouch = event.touches[1];
@@ -385,11 +398,12 @@ export default function FullscreenMusicPlayer({
   }
 
   // Wheel over the album art mirrors the corner zoom button and the pinch
-  // gesture: scroll up fills the frame, scroll down fits it. Gated to the same
-  // conditions as the button so it never zooms a hidden or shrunken frame.
+  // gesture: scroll up fills the frame, scroll down fits it. Strictly gated to
+  // Pro (column + fullscreen) and Pro XL — disabled on Mini, Base, Plus, Pro Max.
   function handleArtWheel(event) {
-    if (!(isPlayerFullscreen || isLargeLayout) || showLyrics) return;
+    if (!canZoomArt) return;
     if (!event.deltaY) return;
+    event.stopPropagation();
     const next = event.deltaY < 0;
     setFillScale(computeArtFillScale());
     setIsArtZoomed((prev) => (prev === next ? prev : next));
@@ -454,7 +468,6 @@ export default function FullscreenMusicPlayer({
   const effectiveAudioTime = (audioRef.current && Number.isFinite(audioRef.current.currentTime)) ? audioRef.current.currentTime : currentTime;
   const effectiveAudioDur = currentDuration || (currentlyPlaying ? pickDurationSeconds(currentlyPlaying) : 0) || 0;
 
-  const isColumnPlayer = Boolean(isLargeLayout && !isPlayerFullscreen);
   const isAdaptiveIcons = Boolean(isColumnPlayer || isPlayerFullscreen);
   const iconStyle = isAdaptiveIcons
     ? { width: 'var(--media-icon-size)', height: 'var(--media-icon-size)' }
@@ -464,6 +477,7 @@ export default function FullscreenMusicPlayer({
 
   const renderArtElement = (isShrunk = false) => {
     if (!currentlyPlaying) return null;
+    const isZoomAllowed = canZoomArt && !isShrunk;
     return (
       <div
         ref={isShrunk ? undefined : artButtonRef}
@@ -472,7 +486,7 @@ export default function FullscreenMusicPlayer({
         tabIndex="0"
         aria-label={isPlayerFullscreen ? (showLyrics ? 'Return to album cover' : 'Show music list (F)') : 'Show fullscreen album art (F)'}
         title={isPlayerFullscreen ? (showLyrics ? 'Return to album cover' : 'Show music list (F)') : 'Show fullscreen album art (F)'}
-        style={{ touchAction: 'none' }}
+        style={{ touchAction: isZoomAllowed ? 'none' : 'manipulation' }}
         onTouchStart={isShrunk ? undefined : handleArtTouchStart}
         onTouchMove={isShrunk ? undefined : handleArtTouchMove}
         onTouchEnd={isShrunk ? undefined : handleArtTouchEnd}
@@ -502,30 +516,34 @@ export default function FullscreenMusicPlayer({
           }
         }}
       >
-        <div ref={artFrameRef} className="player-art-frame select-none" onWheel={handleArtWheel}>
+        <div
+          ref={artFrameRef}
+          className="player-art-frame select-none"
+          onWheel={isZoomAllowed ? handleArtWheel : undefined}
+        >
           <div
             className="player-art-frame-blur select-none"
             style={{ backgroundImage: `url(${displayArtUrl})` }}
           />
           <img
             ref={artImgRef}
-            className={`player-art-foreground select-none${isArtZoomed && !isShrunk ? ' is-art-zoomed' : ''}`}
+            className={`player-art-foreground select-none${isZoomAllowed && isArtZoomed ? ' is-art-zoomed' : ''}`}
             src={displayArtUrl}
             alt={pickTitle(currentlyPlaying)}
             draggable={false}
             onLoad={() => setFillScale(computeArtFillScale())}
             style={{
-              objectFit: isPlayerFullscreen ? 'contain' : 'cover',
+              objectFit: isZoomAllowed ? 'contain' : 'cover',
               pointerEvents: 'auto',
               WebkitTouchCallout: 'default',
               borderRadius: 'inherit',
               width: '100%',
               height: '100%',
               transformOrigin: 'center',
-              willChange: 'transform',
-              transition: `transform ${ART_ZOOM_DURATION}s ${ART_ZOOM_EASE}`,
+              willChange: isZoomAllowed ? 'transform' : 'auto',
+              transition: isZoomAllowed ? `transform ${ART_ZOOM_DURATION}s ${ART_ZOOM_EASE}` : 'none',
               transform: `scale(${
-                isPlayerFullscreen && isArtZoomed && !isShrunk ? fillScale : 1
+                isZoomAllowed && isArtZoomed ? fillScale : 1
               })`,
             }}
             onError={() => {
@@ -534,7 +552,7 @@ export default function FullscreenMusicPlayer({
               }
             }}
           />
-          {(isPlayerFullscreen || isLargeLayout) && !showLyrics && !isShrunk && (
+          {isZoomAllowed && (
             <button
               type="button"
               className="player-art-zoom-button select-none"
